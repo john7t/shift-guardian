@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>員工登入｜Shift Guardian</title>
+<link rel="stylesheet" href="css/style.css" />
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <div class="brand"><span class="dot"></span>Shift Guardian</div>
+    <div class="nav-links">
+      <a href="index.html">公開月曆</a>
+      <a href="employee.html" class="active">員工登入</a>
+      <a href="admin.html">主管後台</a>
+    </div>
+  </div>
+
+  <!-- 尚未登入：手機+啟用碼 或 尚未開通(產生QRCode給主管) -->
+  <div class="card" id="loginCard">
+    <h2>員工登入</h2>
+    <label>手機號碼</label>
+    <input type="tel" id="loginPhone" placeholder="09xxxxxxxx" />
+    <label>啟用碼</label>
+    <input type="text" id="loginCode" placeholder="xxx-xxx" />
+    <div class="btn-row">
+      <button class="btn btn-primary" id="btnLogin">登入</button>
+    </div>
+    <p class="hint" style="margin-top:14px;">還沒有啟用碼？請主管幫你開通帳號：</p>
+    <details>
+      <summary class="hint" style="cursor:pointer;">產生我的手機 QRCode 給主管掃描 ›</summary>
+      <div style="margin-top:12px;">
+        <label>輸入你的手機號碼</label>
+        <input type="tel" id="qrPhone" placeholder="09xxxxxxxx" />
+        <div class="btn-row"><button class="btn btn-secondary" id="btnGenQr">產生 QRCode</button></div>
+        <div id="qrcode" style="margin-top:14px; background:#fff; padding:12px; border-radius:8px; display:inline-block;"></div>
+      </div>
+    </details>
+  </div>
+
+  <!-- 首次登入：補資料 -->
+  <div class="card" id="setupCard" style="display:none;">
+    <h2>首次登入 — 設定基本資料</h2>
+    <label>姓</label><input type="text" id="setLastName" />
+    <label>名</label><input type="text" id="setFirstName" />
+    <label>代號（選填，未填則用「名」的最後一字）</label><input type="text" id="setAlias" placeholder="例如：君" />
+    <label>班別</label>
+    <select id="setShift"></select>
+    <label>到職日</label><input type="date" id="setHireDate" />
+    <div class="btn-row">
+      <button class="btn btn-primary" id="btnSubmitSetup">產生連結傳送給主管確認</button>
+    </div>
+    <p class="hint" style="margin-top:10px;">此資料需經主管確認寫入後才正式生效。</p>
+  </div>
+
+  <!-- 主畫面 -->
+  <div id="mainPanel" style="display:none;">
+    <div class="card">
+      <h2>我的資料</h2>
+      <div id="myInfo" class="hint"></div>
+      <div class="btn-row"><button class="btn btn-secondary" id="btnLogout">登出</button></div>
+    </div>
+
+    <div class="card">
+      <h2>排定下月休假（需選滿 <span id="reqDaysNum"></span> 天）</h2>
+      <div class="hint">點選日期切換選取，藍色框代表其他人已排休/請特休。選好後產生連結傳給主管確認上線。</div>
+      <div class="day-grid" id="offDayGrid" style="margin-top:12px;"></div>
+      <div class="hint" style="margin-top:8px;">已選 <strong id="selectedCount">0</strong> / <span id="reqDaysNum2"></span> 天</div>
+      <div class="btn-row">
+        <button class="btn btn-primary" id="btnSendOffDays">產生連結並傳LINE給主管</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>申請特休</h2>
+      <div id="leaveBalanceInfo" class="hint" style="margin-bottom:10px;"></div>
+      <label>選擇日期</label>
+      <input type="date" id="annualLeaveDate" />
+      <div class="btn-row">
+        <button class="btn btn-primary" id="btnApplyAnnual">產生連結並傳LINE給主管</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script src="js/config.js"></script>
+<script src="js/utils.js"></script>
+<script src="js/github-api.js"></script>
+<script src="js/leave-calc.js"></script>
+<script>
+let session = null; // { employeeId, phone, code }
+let employeesCache = [];
+let currentEmployee = null;
+let scheduleCache = null;
+let targetMonthKey = currentMonthKey(1); // 排休預設排「下個月」
+
+function initShiftOptions() {
+  const sel = document.getElementById("setShift");
+  sel.innerHTML = SHIFTS.map((s) => `<option value="${s.code}">${s.code} ${s.name}（${s.start}-${s.end}）</option>`).join("");
+}
+initShiftOptions();
+document.getElementById("reqDaysNum").textContent = MONTHLY_OFF_DAYS_REQUIRED;
+document.getElementById("reqDaysNum2").textContent = MONTHLY_OFF_DAYS_REQUIRED;
+
+// ---------- QRCode ----------
+document.getElementById("btnGenQr").onclick = () => {
+  const phone = document.getElementById("qrPhone").value.trim();
+  if (!phone) return toast("請輸入手機號碼", "error");
+  renderQRCode("qrcode", phone);
+};
+
+// ---------- 登入 ----------
+document.getElementById("btnLogin").onclick = async () => {
+  const phone = document.getElementById("loginPhone").value.trim();
+  const code = document.getElementById("loginCode").value.trim();
+  if (!phone || !code) return toast("請輸入手機與啟用碼", "error");
+
+  const employees = await readJSON("data/employees.json").catch(() => []);
+  employeesCache = employees || [];
+  const emp = employeesCache.find((e) => e.phone === phone && e.activationCode === code);
+
+  if (!emp) return toast("手機或啟用碼不正確", "error");
+  if (emp.status === "resigned") return toast("此帳號已離職，無法登入", "error");
+
+  session = { employeeId: emp.id, phone, code };
+  localStorage.setItem(LS_KEY_EMPLOYEE_SESSION, JSON.stringify(session));
+  currentEmployee = emp;
+
+  if (emp.status === "issued") {
+    document.getElementById("loginCard").style.display = "none";
+    document.getElementById("setupCard").style.display = "block";
+  } else {
+    showMainPanel();
+  }
+};
+
+// ---------- 首次設定送出 ----------
+document.getElementById("btnSubmitSetup").onclick = () => {
+  const lastName = document.getElementById("setLastName").value.trim();
+  const firstName = document.getElementById("setFirstName").value.trim();
+  let alias = document.getElementById("setAlias").value.trim();
+  const shift = document.getElementById("setShift").value;
+  const hireDate = document.getElementById("setHireDate").value;
+
+  if (!lastName || !firstName || !hireDate) return toast("姓、名、到職日為必填", "error");
+  if (!alias) alias = firstName.slice(-1);
+
+  const payload = {
+    type: "register",
+    employeeId: session.employeeId,
+    phone: session.phone,
+    lastName, firstName, alias, shift, hireDate,
+  };
+  sendToManager(payload, `${lastName}${firstName}（${alias}）完成首次登入設定，班別：${shift}，到職日：${hireDate}，請主管確認寫入系統。`);
+};
+
+// ---------- 顯示主畫面 ----------
+async function showMainPanel() {
+  document.getElementById("loginCard").style.display = "none";
+  document.getElementById("setupCard").style.display = "none";
+  document.getElementById("mainPanel").style.display = "block";
+
+  const config = await readJSON("data/config.json").catch(() => null);
+  scheduleCache = await readJSON(`data/schedule-${targetMonthKey}.json`).catch(() => null);
+  const activeEmployees = employeesCache.filter((e) => e.status === "active" || e.id === currentEmployee.id);
+
+  const shift = getShiftByCode(currentEmployee.shift);
+  document.getElementById("myInfo").innerHTML =
+    `${currentEmployee.lastName || ""}${currentEmployee.firstName || ""}（代號：${currentEmployee.alias || "-"}）｜班別：${shift ? shift.name : currentEmployee.shift}｜到職日：${currentEmployee.hireDate || "-"}`;
+
+  const policy = config?.leavePolicy || DEFAULT_LEAVE_POLICY;
+  const quota = calcAnnualLeaveQuota(currentEmployee.hireDate, policy);
+  const used = scheduleCache
+    ? (scheduleCache.specialLeave || []).filter((r) => r.employeeId === currentEmployee.id && r.status === "approved").length
+    : 0;
+  document.getElementById("leaveBalanceInfo").textContent =
+    `特休總額度 ${quota} 天，已用 ${used} 天，剩餘 ${Math.max(quota - used, 0)} 天`;
+
+  renderOffDayGrid(activeEmployees);
+}
+
+let selectedDays = new Set();
+
+function renderOffDayGrid(activeEmployees) {
+  const nDays = daysInMonth(targetMonthKey);
+  const existingOwn = (scheduleCache?.days?.[currentEmployee.id]) || [];
+  selectedDays = new Set(existingOwn);
+
+  const grid = document.getElementById("offDayGrid");
+  grid.innerHTML = "";
+  for (let d = 1; d <= nDays; d++) {
+    const dateStr = `${targetMonthKey}-${pad2(d)}`;
+    const cell = document.createElement("div");
+    cell.className = "day-cell";
+    cell.textContent = d;
+
+    // 是否有其他人已排休/特休這天
+    const takenByOthers = activeEmployees.some((e) => {
+      if (e.id === currentEmployee.id) return false;
+      const off = (scheduleCache?.days?.[e.id]) || [];
+      const leave = (scheduleCache?.specialLeave || []).some((r) => r.employeeId === e.id && r.date === dateStr && r.status !== "rejected");
+      return off.includes(dateStr) || leave;
+    });
+    if (takenByOthers) cell.classList.add("taken-by-others");
+    if (selectedDays.has(dateStr)) cell.classList.add("selected");
+
+    cell.onclick = () => {
+      if (selectedDays.has(dateStr)) {
+        selectedDays.delete(dateStr);
+        cell.classList.remove("selected");
+      } else {
+        if (selectedDays.size >= MONTHLY_OFF_DAYS_REQUIRED) {
+          return toast(`最多選 ${MONTHLY_OFF_DAYS_REQUIRED} 天，請先取消其他日期`, "error");
+        }
+        selectedDays.add(dateStr);
+        cell.classList.add("selected");
+      }
+      document.getElementById("selectedCount").textContent = selectedDays.size;
+    };
+    grid.appendChild(cell);
+  }
+  document.getElementById("selectedCount").textContent = selectedDays.size;
+}
+
+document.getElementById("btnSendOffDays").onclick = () => {
+  if (selectedDays.size !== MONTHLY_OFF_DAYS_REQUIRED) {
+    return toast(`請選滿 ${MONTHLY_OFF_DAYS_REQUIRED} 天再送出`, "error");
+  }
+  const payload = {
+    type: "off_days",
+    employeeId: currentEmployee.id,
+    month: targetMonthKey,
+    dates: Array.from(selectedDays).sort(),
+  };
+  const name = currentEmployee.alias || currentEmployee.firstName;
+  sendToManager(payload, `${name} 更新了 ${targetMonthKey} 的排休（${payload.dates.join(", ")}），請主管確認上線。`);
+};
+
+document.getElementById("btnApplyAnnual").onclick = () => {
+  const date = document.getElementById("annualLeaveDate").value;
+  if (!date) return toast("請選擇日期", "error");
+  const payload = {
+    type: "leave_request",
+    employeeId: currentEmployee.id,
+    date,
+    requestId: generateRequestId(),
+  };
+  const name = currentEmployee.alias || currentEmployee.firstName;
+  sendToManager(payload, `${name} 申請 ${date} 特休，請主管審核。`);
+};
+
+// ---------- 產生連結並開啟 LINE ----------
+function sendToManager(payload, messagePrefix) {
+  const encoded = encodePayload(payload);
+  const link = `${location.origin}${location.pathname.replace("employee.html", "admin.html")}?apply=${encoded}`;
+  const text = `${messagePrefix}\n審核連結：${link}`;
+  window.open(lineShareUrl(text), "_blank");
+  toast("已產生連結，請在 LINE 視窗選擇要傳送給主管的對話", "success");
+}
+
+document.getElementById("btnLogout").onclick = () => {
+  localStorage.removeItem(LS_KEY_EMPLOYEE_SESSION);
+  location.reload();
+};
+
+// ---------- 自動登入（若已有 session） ----------
+(async function tryAutoLogin() {
+  const saved = localStorage.getItem(LS_KEY_EMPLOYEE_SESSION);
+  if (!saved) return;
+  session = JSON.parse(saved);
+  const employees = await readJSON("data/employees.json").catch(() => []);
+  employeesCache = employees || [];
+  const emp = employeesCache.find((e) => e.id === session.employeeId);
+  if (!emp || emp.status === "resigned") {
+    localStorage.removeItem(LS_KEY_EMPLOYEE_SESSION);
+    return;
+  }
+  currentEmployee = emp;
+  if (emp.status === "issued") {
+    document.getElementById("loginCard").style.display = "none";
+    document.getElementById("setupCard").style.display = "block";
+  } else {
+    showMainPanel();
+  }
+})();
+</script>
+</body>
+</html>

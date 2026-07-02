@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>主管後台｜Shift Guardian</title>
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <div class="brand"><span class="dot"></span>Shift Guardian</div>
+    <div class="nav-links">
+      <a href="index.html">公開月曆</a>
+      <a href="employee.html">員工登入</a>
+      <a href="admin.html" class="active">主管後台</a>
+    </div>
+  </div>
+
+  <!-- Token 登入 -->
+  <div class="card" id="tokenCard">
+    <h2>主管登入</h2>
+    <p class="hint">請輸入具備此 Repo contents 讀寫權限的 GitHub Personal Access Token（僅存於這台裝置的瀏覽器，不會上傳）。</p>
+    <label>GitHub Token</label>
+    <input type="password" id="tokenInput" placeholder="ghp_xxxxxxxxxxxx" />
+    <div class="btn-row"><button class="btn btn-primary" id="btnTokenLogin">登入後台</button></div>
+  </div>
+
+  <div id="adminPanel" style="display:none;">
+
+    <!-- 待處理的申請連結 -->
+    <div class="card" id="applyCard" style="display:none;">
+      <h2>待審核申請</h2>
+      <div id="applyPreview"></div>
+      <div class="btn-row">
+        <button class="btn btn-primary" id="btnApprove">核准並寫入</button>
+        <button class="btn btn-danger" id="btnReject">駁回</button>
+      </div>
+    </div>
+
+    <!-- 開通新員工 -->
+    <div class="card">
+      <h2>開通新員工</h2>
+      <label>員工手機號碼（可請員工出示 QRCode 或直接告知）</label>
+      <input type="tel" id="newPhone" placeholder="09xxxxxxxx" />
+      <div class="btn-row">
+        <button class="btn btn-primary" id="btnCreateEmployee">產生啟用碼</button>
+      </div>
+      <div id="newEmployeeResult" style="margin-top:12px;"></div>
+    </div>
+
+    <!-- 員工清單 -->
+    <div class="card">
+      <h2>員工清單</h2>
+      <div class="row-list" id="employeeList"></div>
+    </div>
+
+    <!-- 本月排休鎖定 -->
+    <div class="card">
+      <h2>本月排休鎖定</h2>
+      <div class="btn-row" style="margin-top:0;">
+        <button class="btn btn-secondary" id="prevMonthAdmin">‹ 上個月</button>
+        <span id="monthLabelAdmin" style="font-family: var(--font-mono); align-self:center; padding:0 6px;"></span>
+        <button class="btn btn-secondary" id="nextMonthAdmin">下個月 ›</button>
+      </div>
+      <div id="monthStatus" class="hint" style="margin:10px 0;"></div>
+      <div class="btn-row">
+        <button class="btn btn-primary" id="btnLockMonth">整批核定並鎖定本月</button>
+        <button class="btn btn-secondary" id="btnUnlockMonth">解除鎖定（重新開放協調）</button>
+      </div>
+    </div>
+
+    <!-- 特休政策 -->
+    <div class="card">
+      <h2>特休天數政策</h2>
+      <label>
+        <input type="radio" name="leaveMode" value="labor_law" style="width:auto; display:inline;" /> 依勞基法級距自動計算
+      </label>
+      <label>
+        <input type="radio" name="leaveMode" value="fixed" style="width:auto; display:inline;" /> 固定天數
+      </label>
+      <div id="fixedDaysWrap" style="display:none;">
+        <label>固定天數</label>
+        <input type="text" id="fixedDaysInput" placeholder="例如 7" />
+      </div>
+      <div class="btn-row"><button class="btn btn-primary" id="btnSavePolicy">儲存政策設定</button></div>
+    </div>
+
+  </div>
+</div>
+
+<script src="js/config.js"></script>
+<script src="js/utils.js"></script>
+<script src="js/github-api.js"></script>
+<script src="js/leave-calc.js"></script>
+<script>
+let token = null;
+let employeesCache = [];
+let configCache = null;
+let adminMonthOffset = 0;
+
+document.getElementById("btnTokenLogin").onclick = () => {
+  const t = document.getElementById("tokenInput").value.trim();
+  if (!t) return toast("請輸入 Token", "error");
+  token = t;
+  sessionStorage.setItem(SS_KEY_ADMIN_TOKEN, t);
+  document.getElementById("tokenCard").style.display = "none";
+  document.getElementById("adminPanel").style.display = "block";
+  boot();
+};
+
+(function tryRestoreToken() {
+  const t = sessionStorage.getItem(SS_KEY_ADMIN_TOKEN);
+  if (t) {
+    token = t;
+    document.getElementById("tokenCard").style.display = "none";
+    document.getElementById("adminPanel").style.display = "block";
+    boot();
+  }
+})();
+
+async function boot() {
+  await loadEmployees();
+  await loadConfig();
+  checkIncomingApply();
+  await loadMonthAdmin();
+}
+
+async function loadEmployees() {
+  employeesCache = (await readJSON("data/employees.json").catch(() => [])) || [];
+  renderEmployeeList();
+}
+
+function renderEmployeeList() {
+  const el = document.getElementById("employeeList");
+  if (employeesCache.length === 0) {
+    el.innerHTML = `<div class="hint">尚無員工，請先在上方開通新員工</div>`;
+    return;
+  }
+  el.innerHTML = employeesCache
+    .map((e) => {
+      const shift = getShiftByCode(e.shift);
+      const statusLabel = { issued: "待完成登入", active: "使用中", resigned: "已離職" }[e.status] || e.status;
+      const statusClass = { issued: "status-pending", active: "status-approved", resigned: "status-rejected" }[e.status];
+      return `<div class="row-item">
+        <div>
+          <strong>${e.alias || (e.lastName || "") + (e.firstName || "") || "(未設定姓名)"}</strong>
+          <span class="meta">${e.phone} ｜ 啟用碼 ${e.activationCode} ｜ ${shift ? shift.name : e.shift || "未選班別"}</span>
+        </div>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span class="status-pill ${statusClass}">${statusLabel}</span>
+          <button class="btn btn-secondary" style="padding:6px 10px; font-size:12px;" onclick="sendActivationLine('${e.phone}','${e.activationCode}')">傳LINE</button>
+          ${e.status !== "resigned" ? `<button class="btn btn-danger" style="padding:6px 10px; font-size:12px;" onclick="markResigned('${e.id}')">離職</button>` : ""}
+        </div>
+      </div>`;
+    })
+    .join("");
+}
+
+function sendActivationLine(phone, code) {
+  const link = `${location.origin}${location.pathname.replace("admin.html", "employee.html")}`;
+  const text = `你的排班系統啟用碼：${code}\n手機：${phone}\n請至此登入設定資料：${link}`;
+  window.open(lineShareUrl(text), "_blank");
+}
+
+document.getElementById("btnCreateEmployee").onclick = async () => {
+  const phone = document.getElementById("newPhone").value.trim();
+  if (!phone) return toast("請輸入手機號碼", "error");
+  if (employeesCache.some((e) => e.phone === phone && e.status !== "resigned")) {
+    return toast("此手機號碼已有帳號", "error");
+  }
+  const code = generateActivationCode();
+  const newEmp = {
+    id: generateEmployeeId(),
+    phone,
+    activationCode: code,
+    status: "issued", // issued -> active -> resigned
+    lastName: "", firstName: "", alias: "", shift: "", hireDate: "",
+    createdAt: new Date().toISOString(),
+  };
+  employeesCache.push(newEmp);
+  try {
+    await writeJSONWithRetry("data/employees.json", employeesCache, `開通新員工 ${phone}`, token);
+    toast("已產生啟用碼並寫入系統", "success");
+    document.getElementById("newEmployeeResult").innerHTML =
+      `<div class="row-item"><div>啟用碼：<strong style="font-family:var(--font-mono)">${code}</strong></div>
+       <button class="btn btn-line" onclick="sendActivationLine('${phone}','${code}')">用 LINE 傳送給員工</button></div>`;
+    document.getElementById("newPhone").value = "";
+    renderEmployeeList();
+  } catch (err) {
+    toast("寫入失敗：" + err.message, "error");
+    employeesCache.pop();
+  }
+};
+
+async function markResigned(empId) {
+  if (!confirm("確定要將此員工標記為離職嗎？離職後該帳號將無法再登入。")) return;
+  const emp = employeesCache.find((e) => e.id === empId);
+  emp.status = "resigned";
+  try {
+    await writeJSONWithRetry("data/employees.json", employeesCache, `標記離職 ${emp.phone}`, token);
+    toast("已標記離職", "success");
+    renderEmployeeList();
+  } catch (err) {
+    toast("寫入失敗：" + err.message, "error");
+  }
+}
+
+async function loadConfig() {
+  configCache = (await readJSON("data/config.json").catch(() => null)) || {
+    storeName: "",
+    leavePolicy: { ...DEFAULT_LEAVE_POLICY },
+  };
+  const policy = configCache.leavePolicy || DEFAULT_LEAVE_POLICY;
+  document.querySelector(`input[name=leaveMode][value="${policy.mode}"]`).checked = true;
+  document.getElementById("fixedDaysInput").value = policy.fixedDays || 7;
+  document.getElementById("fixedDaysWrap").style.display = policy.mode === "fixed" ? "block" : "none";
+}
+
+document.querySelectorAll('input[name=leaveMode]').forEach((r) => {
+  r.onchange = () => {
+    document.getElementById("fixedDaysWrap").style.display = r.value === "fixed" ? "block" : "none";
+  };
+});
+
+document.getElementById("btnSavePolicy").onclick = async () => {
+  const mode = document.querySelector('input[name=leaveMode]:checked').value;
+  const fixedDays = Number(document.getElementById("fixedDaysInput").value) || 7;
+  configCache.leavePolicy = { mode, fixedDays };
+  try {
+    await writeJSONWithRetry("data/config.json", configCache, "更新特休政策設定", token);
+    toast("已儲存特休政策", "success");
+  } catch (err) {
+    toast("寫入失敗：" + err.message, "error");
+  }
+};
+
+// ---------- 月份排休鎖定 ----------
+async function loadMonthAdmin() {
+  const monthKey = currentMonthKey(adminMonthOffset);
+  document.getElementById("monthLabelAdmin").textContent = monthLabel(monthKey);
+  const schedule = await readJSON(`data/schedule-${monthKey}.json`).catch(() => null);
+  const statusEl = document.getElementById("monthStatus");
+  if (!schedule) {
+    statusEl.textContent = "本月尚無任何排休資料。";
+  } else {
+    statusEl.textContent = schedule.status === "locked"
+      ? `已鎖定（核定時間 ${schedule.lockedAt}）`
+      : `協調中，共 ${Object.keys(schedule.days || {}).length} 位員工已排休、${(schedule.specialLeave || []).length} 筆特休申請`;
+  }
+}
+document.getElementById("prevMonthAdmin").onclick = () => { adminMonthOffset--; loadMonthAdmin(); };
+document.getElementById("nextMonthAdmin").onclick = () => { adminMonthOffset++; loadMonthAdmin(); };
+
+document.getElementById("btnLockMonth").onclick = async () => {
+  const monthKey = currentMonthKey(adminMonthOffset);
+  const schedule = (await readJSON(`data/schedule-${monthKey}.json`).catch(() => null)) || { month: monthKey, days: {}, specialLeave: [] };
+  schedule.status = "locked";
+  schedule.lockedAt = new Date().toISOString();
+  try {
+    await writeJSONWithRetry(`data/schedule-${monthKey}.json`, schedule, `鎖定 ${monthKey} 排休`, token);
+    toast("已鎖定本月排休", "success");
+    loadMonthAdmin();
+  } catch (err) {
+    toast("寫入失敗：" + err.message, "error");
+  }
+};
+
+document.getElementById("btnUnlockMonth").onclick = async () => {
+  const monthKey = currentMonthKey(adminMonthOffset);
+  const schedule = await readJSON(`data/schedule-${monthKey}.json`).catch(() => null);
+  if (!schedule) return toast("本月尚無資料", "error");
+  schedule.status = "draft";
+  schedule.lockedAt = null;
+  try {
+    await writeJSONWithRetry(`data/schedule-${monthKey}.json`, schedule, `解除鎖定 ${monthKey}`, token);
+    toast("已解除鎖定", "success");
+    loadMonthAdmin();
+  } catch (err) {
+    toast("寫入失敗：" + err.message, "error");
+  }
+};
+
+// ---------- 處理員工傳來的申請連結 ----------
+let pendingPayload = null;
+
+function checkIncomingApply() {
+  const params = new URLSearchParams(location.search);
+  const encoded = params.get("apply");
+  if (!encoded) return;
+  try {
+    pendingPayload = decodePayload(encoded);
+  } catch (e) {
+    toast("連結格式錯誤", "error");
+    return;
+  }
+  renderApplyPreview();
+}
+
+function findEmpName(empId) {
+  const e = employeesCache.find((x) => x.id === empId);
+  if (!e) return empId;
+  return e.alias || `${e.lastName || ""}${e.firstName || ""}` || empId;
+}
+
+function renderApplyPreview() {
+  const card = document.getElementById("applyCard");
+  const box = document.getElementById("applyPreview");
+  card.style.display = "block";
+
+  if (pendingPayload.type === "register") {
+    const p = pendingPayload;
+    box.innerHTML = `<div class="row-item">
+      <div>
+        <strong>員工首次登入設定</strong>
+        <div class="meta">手機：${p.phone}｜姓名：${p.lastName}${p.firstName}｜代號：${p.alias}｜班別：${getShiftByCode(p.shift)?.name || p.shift}｜到職日：${p.hireDate}</div>
+      </div>
+    </div>`;
+  } else if (pendingPayload.type === "off_days") {
+    const p = pendingPayload;
+    box.innerHTML = `<div class="row-item">
+      <div>
+        <strong>${findEmpName(p.employeeId)} 的排休更新</strong>
+        <div class="meta">月份：${p.month}｜日期：${p.dates.join(", ")}</div>
+      </div>
+    </div>`;
+  } else if (pendingPayload.type === "leave_request") {
+    const p = pendingPayload;
+    box.innerHTML = `<div class="row-item">
+      <div>
+        <strong>${findEmpName(p.employeeId)} 申請特休</strong>
+        <div class="meta">日期：${p.date}</div>
+      </div>
+    </div>`;
+  } else {
+    box.innerHTML = `<div class="hint">未知的申請類型</div>`;
+  }
+}
+
+document.getElementById("btnReject").onclick = () => {
+  pendingPayload = null;
+  document.getElementById("applyCard").style.display = "none";
+  toast("已駁回，未寫入系統", "info");
+  history.replaceState({}, "", location.pathname);
+};
+
+document.getElementById("btnApprove").onclick = async () => {
+  if (!pendingPayload) return;
+  try {
+    if (pendingPayload.type === "register") {
+      const p = pendingPayload;
+      const emp = employeesCache.find((e) => e.id === p.employeeId);
+      if (!emp) throw new Error("找不到對應員工，可能已被刪除");
+      Object.assign(emp, {
+        lastName: p.lastName, firstName: p.firstName, alias: p.alias,
+        shift: p.shift, hireDate: p.hireDate, status: "active",
+      });
+      await writeJSONWithRetry("data/employees.json", employeesCache, `核准 ${p.phone} 首次登入設定`, token);
+    } else if (pendingPayload.type === "off_days") {
+      const p = pendingPayload;
+      const schedule = (await readJSON(`data/schedule-${p.month}.json`).catch(() => null)) || { month: p.month, status: "draft", days: {}, specialLeave: [] };
+      if (schedule.status === "locked") throw new Error("本月已鎖定，若要修改請先解除鎖定");
+      schedule.days = schedule.days || {};
+      schedule.days[p.employeeId] = p.dates;
+      await writeJSONWithRetry(`data/schedule-${p.month}.json`, schedule, `更新 ${findEmpName(p.employeeId)} 的 ${p.month} 排休`, token);
+    } else if (pendingPayload.type === "leave_request") {
+      const p = pendingPayload;
+      const month = p.date.slice(0, 7);
+      const schedule = (await readJSON(`data/schedule-${month}.json`).catch(() => null)) || { month, status: "draft", days: {}, specialLeave: [] };
+      schedule.specialLeave = schedule.specialLeave || [];
+      const existing = schedule.specialLeave.find((r) => r.id === p.requestId);
+      if (existing) {
+        existing.status = "approved";
+      } else {
+        schedule.specialLeave.push({
+          id: p.requestId, employeeId: p.employeeId, date: p.date,
+          type: "annual", status: "approved", requestedAt: new Date().toISOString(),
+          decidedAt: new Date().toISOString(),
+        });
+      }
+      await writeJSONWithRetry(`data/schedule-${month}.json`, schedule, `核准 ${findEmpName(p.employeeId)} 的特休申請 ${p.date}`, token);
+    }
+    toast("已核准並寫入系統", "success");
+    pendingPayload = null;
+    document.getElementById("applyCard").style.display = "none";
+    history.replaceState({}, "", location.pathname);
+    await loadEmployees();
+    await loadMonthAdmin();
+  } catch (err) {
+    toast("寫入失敗：" + err.message, "error");
+  }
+};
+</script>
+</body>
+</html>
