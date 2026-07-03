@@ -83,3 +83,32 @@ function renderQRCode(elementId, text) {
   // eslint-disable-next-line no-undef
   new QRCode(el, { text, width: 180, height: 180 });
 }
+
+// ---------- 密碼雜湊（4碼密碼不存明碼，改存 SHA-256 雜湊） ----------
+async function hashText(text) {
+  const enc = new TextEncoder().encode(text);
+  const buf = await crypto.subtle.digest("SHA-256", enc);
+  return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+// ---------- 本機暫存「已送出但尚未經主管核准」的資料 ----------
+function savePending(employeeId, key, payload) {
+  const store = getAllPending(employeeId);
+  store[key] = { payload, submittedAt: new Date().toISOString() };
+  localStorage.setItem(LS_KEY_PENDING_PREFIX + employeeId, JSON.stringify(store));
+}
+
+function getAllPending(employeeId) {
+  try {
+    return JSON.parse(localStorage.getItem(LS_KEY_PENDING_PREFIX + employeeId) || "{}");
+  } catch (e) {
+    return {};
+  }
+}
+
+function clearPending(employeeId, key) {
+  const store = getAllPending(employeeId);
+  delete store[key];
+  localStorage.setItem(LS_KEY_PENDING_PREFIX + employeeId, JSON.stringify(store));
+}
+
