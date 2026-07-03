@@ -40,6 +40,9 @@ const IDLE_TIMEOUT_MS = 5 * 60 * 1000; // 5 分鐘
 // 同一天請休（排休+已核准特休）達到此人數，視為人力配置低於警戒值
 const MIN_STAFF_WARNING_THRESHOLD = 3;
 
+// 系統版本（每次更新請同步修改，並在頁面底部顯示，方便確認目前載入的是哪個版本）
+const APP_VERSION = "1.0-005";
+
 // localStorage / sessionStorage keys
 const LS_KEY_EMPLOYEE_SESSION = "sg_employee_session"; // { employeeId, phone }
 const LS_KEY_EMPLOYEE_UNLOCKED_AT = "sg_employee_unlocked_at"; // 最後一次通過密碼驗證的時間戳
