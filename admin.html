@@ -17,12 +17,13 @@
     </div>
   </div>
 
-  <!-- 權限檢查 -->
-  <div class="card" id="permCard">
-    <h2>主管權限檢查</h2>
-    <p class="hint">請先在「員工登入」頁面用你的手機號碼登入，再回到這裡按下方按鈕檢查你是否擁有主管權限。</p>
-    <div class="btn-row"><button class="btn btn-primary" id="btnCheckPerm">檢查權限</button></div>
-    <p id="permError" style="display:none; color:var(--danger); margin-top:12px; font-size:13px;"></p>
+  <!-- Token 登入 -->
+  <div class="card" id="tokenCard">
+    <h2>主管登入</h2>
+    <p class="hint">請輸入具備此 Repo contents 讀寫權限的 GitHub Personal Access Token（僅存於這台裝置的瀏覽器，不會上傳）。</p>
+    <label>GitHub Token</label>
+    <input type="password" id="tokenInput" placeholder="ghp_xxxxxxxxxxxx" />
+    <div class="btn-row"><button class="btn btn-primary" id="btnTokenLogin">登入後台</button></div>
   </div>
 
   <div id="adminPanel" style="display:none;">
@@ -35,7 +36,6 @@
         <button class="btn btn-primary" id="btnApprove">核准並寫入</button>
         <button class="btn btn-danger" id="btnReject">駁回</button>
       </div>
-      <p id="applyError" style="display:none; color:var(--danger); margin-top:10px; font-size:13px;"></p>
     </div>
 
     <!-- 開通新員工 -->
@@ -53,14 +53,6 @@
     <div class="card">
       <h2>員工清單</h2>
       <div class="row-list" id="employeeList"></div>
-    </div>
-
-    <!-- 主管權限管理 -->
-    <div class="card">
-      <h2>主管權限管理</h2>
-      <p class="hint">勾選的員工將可在主管後台通過「檢查權限」，並自行輸入 Token 進行審核與寫入。手機 <span id="adminBypassPhoneLabel"></span> 永遠擁有主管權限，不受此設定影響。</p>
-      <div class="row-list" id="managerList"></div>
-      <div class="btn-row"><button class="btn btn-primary" id="btnSaveManagers">儲存主管權限設定</button></div>
     </div>
 
     <!-- 本月排休鎖定 -->
@@ -94,19 +86,6 @@
       <div class="btn-row"><button class="btn btn-primary" id="btnSavePolicy">儲存政策設定</button></div>
     </div>
 
-    <!-- Token 設定（每位主管在自己裝置上各自輸入） -->
-    <div class="card">
-      <h2>我的 GitHub Token 設定</h2>
-      <p class="hint">此 Token 只會存在你目前使用的這台裝置（瀏覽器 localStorage），不會同步給其他主管，每位主管都要在自己的裝置上各自輸入一次。具備寫入權限的操作（核准申請、開通員工、鎖定月份等）都需要這裡設定好有效的 Token 才能執行。</p>
-      <label>GitHub Token</label>
-      <input type="password" id="tokenInput" placeholder="ghp_xxxxxxxxxxxx" />
-      <div class="btn-row">
-        <button class="btn btn-primary" id="btnSaveToken">驗證並存檔</button>
-        <button class="btn btn-secondary" id="btnClearToken">清除本機 Token</button>
-      </div>
-      <p id="tokenStatus" class="hint" style="margin-top:10px;"></p>
-    </div>
-
   </div>
 </div>
 
@@ -119,100 +98,28 @@ let token = null;
 let employeesCache = [];
 let configCache = null;
 let adminMonthOffset = 0;
-let currentAdminEmployee = null; // 通過權限檢查的那位員工（本機 employee.html session）
 
-// ---------- 權限檢查 ----------
-document.getElementById("btnCheckPerm").onclick = async () => {
-  const saved = localStorage.getItem(LS_KEY_EMPLOYEE_SESSION);
-  const errEl = document.getElementById("permError");
-  errEl.style.display = "none";
-
-  if (!saved) {
-    errEl.textContent = "請先在「員工登入」頁面登入後再檢查。";
-    errEl.style.display = "block";
-    return;
-  }
-  const session = JSON.parse(saved);
-
-  if (session.phone === ADMIN_BYPASS_PHONE) {
-    currentAdminEmployee = { id: session.employeeId, phone: session.phone, isManager: true };
-    grantAccess();
-    return;
-  }
-
-  employeesCache = (await readJSON("data/employees.json").catch(() => [])) || [];
-  const emp = employeesCache.find((e) => e.id === session.employeeId);
-  if (!emp) {
-    errEl.textContent = "找不到你的員工資料，請確認已完成首次登入設定並經主管核准。";
-    errEl.style.display = "block";
-    return;
-  }
-  if (!emp.isManager) {
-    errEl.textContent = `此帳號（${emp.alias || emp.firstName || emp.phone}）目前沒有主管權限，請請現任主管在「主管權限管理」加開。`;
-    errEl.style.display = "block";
-    return;
-  }
-  currentAdminEmployee = emp;
-  grantAccess();
-};
-
-function grantAccess() {
-  document.getElementById("permCard").style.display = "none";
-  document.getElementById("adminPanel").style.display = "block";
-  boot();
-}
-
-// ---------- Token 設定 ----------
-function restoreTokenUI() {
-  const t = localStorage.getItem(LS_KEY_ADMIN_TOKEN);
-  const statusEl = document.getElementById("tokenStatus");
-  if (t) {
-    token = t;
-    document.getElementById("tokenInput").value = t;
-    statusEl.textContent = "本機已儲存 Token。";
-  } else {
-    statusEl.textContent = "尚未設定 Token，無法執行任何寫入操作。";
-  }
-}
-
-document.getElementById("btnSaveToken").onclick = async () => {
+document.getElementById("btnTokenLogin").onclick = () => {
   const t = document.getElementById("tokenInput").value.trim();
   if (!t) return toast("請輸入 Token", "error");
-  const btn = document.getElementById("btnSaveToken");
-  btn.disabled = true; btn.textContent = "驗證中…";
-  const result = await validateAdminToken(t);
-  btn.disabled = false; btn.textContent = "驗證並存檔";
-
-  if (!result.ok) {
-    toast("Token 驗證失敗：" + result.reason, "error");
-    document.getElementById("tokenStatus").textContent = "驗證失敗：" + result.reason;
-    return;
-  }
   token = t;
-  localStorage.setItem(LS_KEY_ADMIN_TOKEN, t);
-  document.getElementById("tokenStatus").textContent = "驗證成功，已儲存在本機。";
-  toast("Token 已儲存", "success");
+  sessionStorage.setItem(SS_KEY_ADMIN_TOKEN, t);
+  document.getElementById("tokenCard").style.display = "none";
+  document.getElementById("adminPanel").style.display = "block";
+  boot();
 };
 
-document.getElementById("btnClearToken").onclick = () => {
-  localStorage.removeItem(LS_KEY_ADMIN_TOKEN);
-  token = null;
-  document.getElementById("tokenInput").value = "";
-  document.getElementById("tokenStatus").textContent = "已清除本機 Token。";
-};
-
-function requireToken() {
-  if (!token) {
-    toast("請先在下方「我的 GitHub Token 設定」輸入並存檔", "error");
-    return false;
+(function tryRestoreToken() {
+  const t = sessionStorage.getItem(SS_KEY_ADMIN_TOKEN);
+  if (t) {
+    token = t;
+    document.getElementById("tokenCard").style.display = "none";
+    document.getElementById("adminPanel").style.display = "block";
+    boot();
   }
-  return true;
-}
+})();
 
-// ---------- 開機 ----------
 async function boot() {
-  document.getElementById("adminBypassPhoneLabel").textContent = ADMIN_BYPASS_PHONE;
-  restoreTokenUI();
   await loadEmployees();
   await loadConfig();
   checkIncomingApply();
@@ -222,7 +129,6 @@ async function boot() {
 async function loadEmployees() {
   employeesCache = (await readJSON("data/employees.json").catch(() => [])) || [];
   renderEmployeeList();
-  renderManagerList();
 }
 
 function renderEmployeeList() {
@@ -236,11 +142,10 @@ function renderEmployeeList() {
       const shift = getShiftByCode(e.shift);
       const statusLabel = { issued: "待完成登入", active: "使用中", resigned: "已離職" }[e.status] || e.status;
       const statusClass = { issued: "status-pending", active: "status-approved", resigned: "status-rejected" }[e.status];
-      const mgrTag = e.isManager ? ` <span class="status-pill status-locked">主管</span>` : "";
       return `<div class="row-item">
         <div>
-          <strong>${e.alias || (e.lastName || "") + (e.firstName || "") || "(未設定姓名)"}</strong>${mgrTag}
-          <span class="meta">${e.phone} ｜ 啟用碼 ${e.activationCode || "-"} ｜ ${shift ? shift.name : e.shift || "未選班別"}</span>
+          <strong>${e.alias || (e.lastName || "") + (e.firstName || "") || "(未設定姓名)"}</strong>
+          <span class="meta">${e.phone} ｜ 啟用碼 ${e.activationCode} ｜ ${shift ? shift.name : e.shift || "未選班別"}</span>
         </div>
         <div style="display:flex; align-items:center; gap:8px;">
           <span class="status-pill ${statusClass}">${statusLabel}</span>
@@ -252,37 +157,6 @@ function renderEmployeeList() {
     .join("");
 }
 
-function renderManagerList() {
-  const el = document.getElementById("managerList");
-  const activeEmployees = employeesCache.filter((e) => e.status === "active");
-  if (activeEmployees.length === 0) {
-    el.innerHTML = `<div class="hint">尚無已完成設定的員工</div>`;
-    return;
-  }
-  el.innerHTML = activeEmployees.map((e) => `
-    <label style="display:flex; align-items:center; gap:8px; background:var(--surface-2); border:1px solid var(--line); border-radius:8px; padding:10px 12px; margin:0;">
-      <input type="checkbox" data-empid="${e.id}" ${e.isManager ? "checked" : ""} style="width:auto;" />
-      <span>${e.alias || e.firstName}（${e.phone}）${getShiftByCode(e.shift)?.name ? " ｜ " + getShiftByCode(e.shift).name : ""}</span>
-    </label>
-  `).join("");
-}
-
-document.getElementById("btnSaveManagers").onclick = async () => {
-  if (!requireToken()) return;
-  const checkboxes = document.querySelectorAll('#managerList input[type=checkbox]');
-  checkboxes.forEach((cb) => {
-    const emp = employeesCache.find((e) => e.id === cb.dataset.empid);
-    if (emp) emp.isManager = cb.checked;
-  });
-  try {
-    await writeJSONWithRetry("data/employees.json", employeesCache, "更新主管權限設定", token);
-    toast("已儲存主管權限設定", "success");
-    renderEmployeeList();
-  } catch (err) {
-    toast("寫入失敗：" + err.message, "error");
-  }
-};
-
 function sendActivationLine(phone, code) {
   const link = `${location.origin}${location.pathname.replace("admin.html", "employee.html")}`;
   const text = `你的排班系統啟用碼：${code}\n手機：${phone}\n請至此登入設定資料：${link}`;
@@ -290,7 +164,6 @@ function sendActivationLine(phone, code) {
 }
 
 document.getElementById("btnCreateEmployee").onclick = async () => {
-  if (!requireToken()) return;
   const phone = document.getElementById("newPhone").value.trim();
   if (!phone) return toast("請輸入手機號碼", "error");
   if (employeesCache.some((e) => e.phone === phone && e.status !== "resigned")) {
@@ -301,9 +174,8 @@ document.getElementById("btnCreateEmployee").onclick = async () => {
     id: generateEmployeeId(),
     phone,
     activationCode: code,
-    status: "issued",
+    status: "issued", // issued -> active -> resigned
     lastName: "", firstName: "", alias: "", shift: "", hireDate: "",
-    passwordHash: "", isManager: false,
     createdAt: new Date().toISOString(),
   };
   employeesCache.push(newEmp);
@@ -315,7 +187,6 @@ document.getElementById("btnCreateEmployee").onclick = async () => {
        <button class="btn btn-line" onclick="sendActivationLine('${phone}','${code}')">用 LINE 傳送給員工</button></div>`;
     document.getElementById("newPhone").value = "";
     renderEmployeeList();
-    renderManagerList();
   } catch (err) {
     toast("寫入失敗：" + err.message, "error");
     employeesCache.pop();
@@ -323,16 +194,13 @@ document.getElementById("btnCreateEmployee").onclick = async () => {
 };
 
 async function markResigned(empId) {
-  if (!requireToken()) return;
   if (!confirm("確定要將此員工標記為離職嗎？離職後該帳號將無法再登入。")) return;
   const emp = employeesCache.find((e) => e.id === empId);
   emp.status = "resigned";
-  emp.isManager = false;
   try {
     await writeJSONWithRetry("data/employees.json", employeesCache, `標記離職 ${emp.phone}`, token);
     toast("已標記離職", "success");
     renderEmployeeList();
-    renderManagerList();
   } catch (err) {
     toast("寫入失敗：" + err.message, "error");
   }
@@ -356,7 +224,6 @@ document.querySelectorAll('input[name=leaveMode]').forEach((r) => {
 });
 
 document.getElementById("btnSavePolicy").onclick = async () => {
-  if (!requireToken()) return;
   const mode = document.querySelector('input[name=leaveMode]:checked').value;
   const fixedDays = Number(document.getElementById("fixedDaysInput").value) || 7;
   configCache.leavePolicy = { mode, fixedDays };
@@ -386,7 +253,6 @@ document.getElementById("prevMonthAdmin").onclick = () => { adminMonthOffset--; 
 document.getElementById("nextMonthAdmin").onclick = () => { adminMonthOffset++; loadMonthAdmin(); };
 
 document.getElementById("btnLockMonth").onclick = async () => {
-  if (!requireToken()) return;
   const monthKey = currentMonthKey(adminMonthOffset);
   const schedule = (await readJSON(`data/schedule-${monthKey}.json`).catch(() => null)) || { month: monthKey, days: {}, specialLeave: [] };
   schedule.status = "locked";
@@ -401,7 +267,6 @@ document.getElementById("btnLockMonth").onclick = async () => {
 };
 
 document.getElementById("btnUnlockMonth").onclick = async () => {
-  if (!requireToken()) return;
   const monthKey = currentMonthKey(adminMonthOffset);
   const schedule = await readJSON(`data/schedule-${monthKey}.json`).catch(() => null);
   if (!schedule) return toast("本月尚無資料", "error");
@@ -447,7 +312,7 @@ function renderApplyPreview() {
     const p = pendingPayload;
     box.innerHTML = `<div class="row-item">
       <div>
-        <strong>員工首次登入設定${p.isBypassAdmin ? "（管理員帳號）" : ""}</strong>
+        <strong>員工首次登入設定</strong>
         <div class="meta">手機：${p.phone}｜姓名：${p.lastName}${p.firstName}｜代號：${p.alias}｜班別：${getShiftByCode(p.shift)?.name || p.shift}｜到職日：${p.hireDate}</div>
       </div>
     </div>`;
@@ -467,14 +332,6 @@ function renderApplyPreview() {
         <div class="meta">日期：${p.date}</div>
       </div>
     </div>`;
-  } else if (pendingPayload.type === "reset_password") {
-    const p = pendingPayload;
-    box.innerHTML = `<div class="row-item">
-      <div>
-        <strong>${findEmpName(p.employeeId)} 申請重設密碼</strong>
-        <div class="meta">手機：${p.phone}｜請務必確認這是本人操作再核准</div>
-      </div>
-    </div>`;
   } else {
     box.innerHTML = `<div class="hint">未知的申請類型</div>`;
   }
@@ -489,27 +346,14 @@ document.getElementById("btnReject").onclick = () => {
 
 document.getElementById("btnApprove").onclick = async () => {
   if (!pendingPayload) return;
-  const errEl = document.getElementById("applyError");
-  errEl.style.display = "none";
-  if (!requireToken()) return;
-
   try {
     if (pendingPayload.type === "register") {
       const p = pendingPayload;
-      let emp = employeesCache.find((e) => e.id === p.employeeId);
-      const isFirstActive = employeesCache.filter((e) => e.status === "active").length === 0;
-      const grantManager = p.isBypassAdmin || isFirstActive;
-
-      if (!emp) {
-        // 管理員手機自助註冊、系統內尚無此筆紀錄 → 直接新增
-        emp = { id: p.employeeId, phone: p.phone, activationCode: "", createdAt: new Date().toISOString() };
-        employeesCache.push(emp);
-      }
+      const emp = employeesCache.find((e) => e.id === p.employeeId);
+      if (!emp) throw new Error("找不到對應員工，可能已被刪除");
       Object.assign(emp, {
         lastName: p.lastName, firstName: p.firstName, alias: p.alias,
-        shift: p.shift, hireDate: p.hireDate, passwordHash: p.passwordHash,
-        status: "active",
-        isManager: emp.isManager || grantManager,
+        shift: p.shift, hireDate: p.hireDate, status: "active",
       });
       await writeJSONWithRetry("data/employees.json", employeesCache, `核准 ${p.phone} 首次登入設定`, token);
     } else if (pendingPayload.type === "off_days") {
@@ -535,12 +379,6 @@ document.getElementById("btnApprove").onclick = async () => {
         });
       }
       await writeJSONWithRetry(`data/schedule-${month}.json`, schedule, `核准 ${findEmpName(p.employeeId)} 的特休申請 ${p.date}`, token);
-    } else if (pendingPayload.type === "reset_password") {
-      const p = pendingPayload;
-      const emp = employeesCache.find((e) => e.id === p.employeeId);
-      if (!emp) throw new Error("找不到對應員工");
-      emp.passwordHash = p.newPasswordHash;
-      await writeJSONWithRetry("data/employees.json", employeesCache, `核准 ${p.phone} 重設密碼`, token);
     }
     toast("已核准並寫入系統", "success");
     pendingPayload = null;
@@ -549,8 +387,7 @@ document.getElementById("btnApprove").onclick = async () => {
     await loadEmployees();
     await loadMonthAdmin();
   } catch (err) {
-    errEl.textContent = "寫入失敗：" + err.message;
-    errEl.style.display = "block";
+    toast("寫入失敗：" + err.message, "error");
   }
 };
 </script>
