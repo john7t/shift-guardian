@@ -40,9 +40,8 @@
 
     <div id="statusLine" class="hint" style="margin:8px 0 0;"></div>
 
-    <div class="cal-scroll" style="margin-top:14px;">
-      <table class="cal" id="calTable"></table>
-    </div>
+    <div id="calWeeks"></div>
+
 
     <div class="legend">
       <span><span class="swatch" style="background:var(--dawn)"></span>日間班（A1/A2/B）</span>
@@ -91,41 +90,81 @@ async function loadMonth() {
   renderLeaveTable(activeEmployees, config, schedule);
 }
 
+const WEEKDAY_LABELS = ["日", "一", "二", "三", "四", "五", "六"];
+
 function renderCalendar(monthKey, employees, schedule) {
   const nDays = daysInMonth(monthKey);
-  const table = document.getElementById("calTable");
-  let thead = "<thead><tr><th>員工</th>";
-  for (let d = 1; d <= nDays; d++) thead += `<th>${d}</th>`;
-  thead += "</tr></thead>";
+  const [y, m] = monthKey.split("-").map(Number);
+  const container = document.getElementById("calWeeks");
+  container.innerHTML = "";
 
-  let tbody = "<tbody>";
   if (employees.length === 0) {
-    tbody += `<tr><td colspan="${nDays + 1}" class="hint" style="padding:20px;">尚無員工資料</td></tr>`;
+    container.innerHTML = `<div class="hint" style="padding:14px 0;">尚無員工資料</div>`;
+    return;
   }
-  for (const emp of employees) {
-    const shift = getShiftByCode(emp.shift);
-    const offDays = (schedule?.days?.[emp.id]) || [];
-    const specialLeave = (schedule?.specialLeave || []).filter((r) => r.employeeId === emp.id);
 
-    tbody += `<tr><td class="emp-name">${emp.alias || emp.lastName + emp.firstName}<br><span class="hint">${shift ? shift.name : "-"}</span></td>`;
-    for (let d = 1; d <= nDays; d++) {
-      const dateStr = `${monthKey}-${pad2(d)}`;
-      const isOff = offDays.includes(dateStr);
-      const leaveReq = specialLeave.find((r) => r.date === dateStr);
-      let cellHtml = "";
-      if (leaveReq) {
-        if (leaveReq.status === "approved") cellHtml = `<span class="badge annual">特</span>`;
-        else if (leaveReq.status === "pending") cellHtml = `<span class="badge pending">待</span>`;
-        // rejected 不顯示
-      } else if (isOff) {
-        cellHtml = `<span class="badge off">休</span>`;
-      }
-      tbody += `<td>${cellHtml}</td>`;
+  // 依「週日為一週開始」把整月切成好幾週
+  let d = 1;
+  let weekIndex = 1;
+  while (d <= nDays) {
+    const firstDateOfWeek = new Date(y, m - 1, d);
+    const startDow = firstDateOfWeek.getDay(); // 0=週日
+    const weekDates = [];
+    // 這週從 d 開始，補到週六，或月底為止
+    let cursor = d;
+    for (let dow = startDow; dow <= 6 && cursor <= nDays; dow++, cursor++) {
+      weekDates.push(cursor);
     }
-    tbody += "</tr>";
+
+    const block = document.createElement("div");
+    block.className = "cal-scroll";
+    block.style.marginBottom = "18px";
+
+    const firstD = weekDates[0], lastD = weekDates[weekDates.length - 1];
+    const title = document.createElement("h3");
+    title.textContent = `第 ${weekIndex} 週　${m}/${firstD} － ${m}/${lastD}`;
+    container.appendChild(title);
+
+    let thead = "<thead><tr><th>員工</th>";
+    for (const dayNum of weekDates) {
+      const dow = new Date(y, m - 1, dayNum).getDay();
+      thead += `<th>${dayNum}<br><span class="hint">${WEEKDAY_LABELS[dow]}</span></th>`;
+    }
+    thead += "</tr></thead>";
+
+    let tbody = "<tbody>";
+    for (const emp of employees) {
+      const shift = getShiftByCode(emp.shift);
+      const offDays = (schedule?.days?.[emp.id]) || [];
+      const specialLeave = (schedule?.specialLeave || []).filter((r) => r.employeeId === emp.id);
+      tbody += `<tr><td class="emp-name">${emp.alias || emp.lastName + emp.firstName}<br><span class="hint">${shift ? shift.name : "-"}</span></td>`;
+      for (const dayNum of weekDates) {
+        const dateStr = `${monthKey}-${pad2(dayNum)}`;
+        const isOff = offDays.includes(dateStr);
+        const leaveReq = specialLeave.find((r) => r.date === dateStr);
+        let cellHtml = "";
+        if (leaveReq) {
+          if (leaveReq.status === "approved") cellHtml = `<span class="badge annual">特</span>`;
+          else if (leaveReq.status === "pending") cellHtml = `<span class="badge pending">待</span>`;
+        } else if (isOff) {
+          cellHtml = `<span class="badge off">休</span>`;
+        }
+        tbody += `<td>${cellHtml}</td>`;
+      }
+      tbody += "</tr>";
+    }
+    tbody += "</tbody>";
+
+    const table = document.createElement("table");
+    table.className = "cal";
+    table.style.minWidth = "0";
+    table.innerHTML = thead + tbody;
+    block.appendChild(table);
+    container.appendChild(block);
+
+    d = lastD + 1;
+    weekIndex++;
   }
-  tbody += "</tbody>";
-  table.innerHTML = thead + tbody;
 }
 
 function renderLeaveTable(employees, config, schedule) {
