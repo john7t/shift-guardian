@@ -1,7 +1,7 @@
 // ============================================
 // 全域設定
 // ============================================
-const GITHUB_OWNER = "john7t"; // TODO: 改成你的 GitHub 帳號
+const GITHUB_OWNER = "YOUR_GITHUB_USERNAME"; // TODO: 改成你的 GitHub 帳號
 const REPO_NAME = "shift-guardian";          // repo 名稱
 const REPO_BRANCH = "main";
 
@@ -20,6 +20,13 @@ const SHIFTS = [
 
 function getShiftByCode(code) {
   return SHIFTS.find((s) => s.code === code) || null;
+}
+
+// 取得班別顯示用名稱，處理「無班別」(NONE) 這個特殊值
+function getShiftLabel(code) {
+  if (!code || code === "NONE") return "無班別";
+  const s = getShiftByCode(code);
+  return s ? `${s.code} ${s.name}` : code;
 }
 
 // 每人每月固定要排的休假天數
@@ -41,7 +48,7 @@ const IDLE_TIMEOUT_MS = 5 * 60 * 1000; // 5 分鐘
 const MIN_STAFF_WARNING_THRESHOLD = 3;
 
 // 系統版本（每次更新請同步修改，並在頁面底部顯示，方便確認目前載入的是哪個版本）
-const APP_VERSION = "1.0-005";
+const APP_VERSION = "1.0-006";
 
 // localStorage / sessionStorage keys
 const LS_KEY_EMPLOYEE_SESSION = "sg_employee_session"; // { employeeId, phone }
