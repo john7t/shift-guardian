@@ -1,1 +1,14 @@
-[]
+[
+  {
+    "id": "emp_test0001",
+    "phone": "0975379800",
+    "activationCode": "123-555",
+    "status": "issued",
+    "lastName": "",
+    "firstName": "",
+    "alias": "",
+    "shift": "",
+    "hireDate": "",
+    "createdAt": "2026-07-03T00:00:00.000Z"
+  }
+]
