@@ -165,7 +165,6 @@ table.cal {
   border-collapse: collapse;
   width: 100%;
   font-size: 13px;
-  min-width: 720px;
 }
 table.cal th, table.cal td {
   border: 1px solid var(--line);
