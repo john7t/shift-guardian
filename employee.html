@@ -165,6 +165,8 @@
 
 </div>
 
+<div class="hint" style="text-align:center; margin:8px 0 24px; opacity:0.5; max-width:960px; margin-left:auto; margin-right:auto;">v<span id="versionFooter"></span></div>
+
 <script src="js/config.js"></script>
 <script src="js/utils.js"></script>
 <script src="js/github-api.js"></script>
@@ -619,6 +621,8 @@ document.addEventListener("visibilitychange", () => {
     showScreen("screenLock");
   }
 });
+
+document.getElementById("versionFooter").textContent = APP_VERSION;
 </script>
 </body>
 </html>

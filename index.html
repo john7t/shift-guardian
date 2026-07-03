@@ -70,6 +70,8 @@
     <div id="leaveLog" class="row-list"></div>
   </div>
 
+  <div class="hint" style="text-align:center; margin-top:20px; opacity:0.5;">v<span id="versionFooter"></span></div>
+
 </div>
 
 <script src="js/config.js"></script>
@@ -313,6 +315,7 @@ document.getElementById("prevMonth").onclick = () => { if (navIndex > 0) { navIn
 document.getElementById("nextMonth").onclick = () => { navIndex++; loadView(); };
 
 loadView();
+document.getElementById("versionFooter").textContent = APP_VERSION;
 </script>
 </body>
 </html>
