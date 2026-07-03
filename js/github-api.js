@@ -74,6 +74,43 @@ async function writeJSON(path, data, message, token) {
 }
 
 /**
+ * 驗證Token是否有效、且對這個repo擁有寫入(push)權限
+ * @returns {Promise<{ok: boolean, reason?: string}>}
+ */
+async function validateAdminToken(token) {
+  if (!token || token.trim().length < 10) {
+    return { ok: false, reason: "Token 格式看起來不完整" };
+  }
+  let res;
+  try {
+    res = await fetch(`https://api.github.com/repos/${GITHUB_OWNER}/${REPO_NAME}`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/vnd.github+json",
+      },
+    });
+  } catch (e) {
+    return { ok: false, reason: "無法連線到 GitHub，請檢查網路" };
+  }
+
+  if (res.status === 401) {
+    return { ok: false, reason: "Token 無效或已過期（401 Bad credentials）" };
+  }
+  if (res.status === 404) {
+    return { ok: false, reason: `找不到 repo ${GITHUB_OWNER}/${REPO_NAME}，請確認 config.js 設定或 Token 的 repository access` };
+  }
+  if (!res.ok) {
+    return { ok: false, reason: `驗證失敗（${res.status}）` };
+  }
+
+  const info = await res.json();
+  if (!info.permissions || !info.permissions.push) {
+    return { ok: false, reason: "此 Token 沒有寫入(push)權限，請確認 Fine-grained token 的 Contents 設定為 Read and write" };
+  }
+  return { ok: true };
+}
+
+/**
  * 帶重試機制的寫入（處理並發寫入衝突：sha 過期時重新抓一次再試一次）
  */
 async function writeJSONWithRetry(path, data, message, token, maxRetry = 2) {
