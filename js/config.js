@@ -31,14 +31,6 @@ const DEFAULT_LEAVE_POLICY = {
   fixedDays: 7,
 };
 
-// 這支手機號碼永遠視為管理員：登入免啟用碼/密碼，且自動擁有主管權限
-const ADMIN_BYPASS_PHONE = "0975379800";
-
-// 員工端閒置逾時（毫秒）：超過此時間沒有操作，回來時需重新輸入4碼密碼
-const IDLE_TIMEOUT_MS = 5 * 60 * 1000; // 5 分鐘
-
 // localStorage / sessionStorage keys
-const LS_KEY_EMPLOYEE_SESSION = "sg_employee_session"; // { employeeId, phone }
-const LS_KEY_EMPLOYEE_UNLOCKED_AT = "sg_employee_unlocked_at"; // 最後一次通過密碼驗證的時間戳
-const LS_KEY_ADMIN_TOKEN = "sg_admin_token_v2"; // 存在本機，每位主管各自在自己裝置輸入
-const LS_KEY_PENDING_PREFIX = "sg_pending_"; // + employeeId，暫存尚未經主管核准的送出內容
+const LS_KEY_EMPLOYEE_SESSION = "sg_employee_session"; // { phone, code }
+const SS_KEY_ADMIN_TOKEN = "sg_admin_token";
