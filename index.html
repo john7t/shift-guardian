@@ -10,7 +10,7 @@
 <div class="wrap">
 
   <div class="topbar">
-    <div class="brand"><span class="dot"></span>Shift Guardian 班表總覽</div>
+    <div class="brand"><span class="dot"></span><span id="brandName">Shift Guardian</span></div>
     <div class="nav-links">
       <a href="index.html" class="active">公開月曆</a>
       <a href="employee.html">員工登入</a>
@@ -32,17 +32,18 @@
     <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;">
       <h2 style="margin:0;">月曆班表</h2>
       <div class="btn-row" style="margin-top:0;">
-        <button class="btn btn-secondary" id="prevMonth">‹ 上個月</button>
+        <button class="btn btn-secondary" id="prevMonth">‹ 上一頁</button>
         <span id="monthLabel" style="font-family: var(--font-mono); align-self:center; padding:0 6px;"></span>
-        <button class="btn btn-secondary" id="nextMonth">下個月 ›</button>
+        <button class="btn btn-secondary" id="nextMonth">下一頁 ›</button>
       </div>
     </div>
 
+    <div id="demoBadge" style="display:none; margin-top:8px;">
+      <span class="status-pill status-pending">示範資料，非實際排班</span>
+    </div>
     <div id="statusLine" class="hint" style="margin:8px 0 0;"></div>
 
-    <div class="cal-scroll" style="margin-top:14px;">
-      <table class="cal" id="calTable"></table>
-    </div>
+    <div id="calWeeks" style="margin-top:14px;"></div>
 
     <div class="legend">
       <span><span class="swatch" style="background:var(--dawn)"></span>日間班（A1/A2/B）</span>
@@ -53,9 +54,20 @@
     </div>
   </div>
 
+  <div class="card" id="warningCard" style="display:none;">
+    <h2>人力配置提醒</h2>
+    <div id="warningList"></div>
+  </div>
+
   <div class="card">
     <h2>特休使用總表</h2>
     <div id="leaveTable" class="row-list"></div>
+  </div>
+
+  <div class="card">
+    <h2>特休申請紀錄</h2>
+    <div class="hint" style="margin-bottom:10px;">誰在什麼時候提出申請、主管什麼時候核准。</div>
+    <div id="leaveLog" class="row-list"></div>
   </div>
 
 </div>
@@ -64,11 +76,45 @@
 <script src="js/utils.js"></script>
 <script src="js/github-api.js"></script>
 <script src="js/leave-calc.js"></script>
+<script src="js/demo-data.js"></script>
 <script>
-let monthOffset = 0;
+// navIndex: 0=展示頁1, 1=展示頁2, 2+ = 真實月份（offset = navIndex-2）
+let navIndex = 0;
 
-async function loadMonth() {
-  const monthKey = currentMonthKey(monthOffset);
+function hasEmployeeSession() {
+  return !!localStorage.getItem(LS_KEY_EMPLOYEE_SESSION);
+}
+
+async function loadBrand() {
+  const config = await readJSON("data/config.json").catch(() => null);
+  document.getElementById("brandName").textContent = (config && config.storeName) ? config.storeName : "Shift Guardian";
+}
+loadBrand();
+
+async function loadView() {
+  document.getElementById("demoBadge").style.display = "none";
+
+  if (navIndex === 0 || navIndex === 1) {
+    const isDemo1 = navIndex === 0;
+    const monthKey = isDemo1 ? DEMO1_MONTH : DEMO2_MONTH;
+    const schedule = isDemo1 ? DEMO1_SCHEDULE : DEMO2_SCHEDULE;
+    document.getElementById("monthLabel").textContent = `${monthLabel(monthKey)}（示範 ${isDemo1 ? 1 : 2}）`;
+    document.getElementById("demoBadge").style.display = "block";
+    document.getElementById("statusLine").textContent = isDemo1
+      ? "示範情境：6位員工排休大致錯開，另有2筆已核准的特休。"
+      : "示範情境：多位員工排休重疊，下方會列出人力短缺的日期與人員。";
+
+    renderCalendar(monthKey, DEMO_EMPLOYEES, schedule, true);
+    renderWarnings(monthKey, DEMO_EMPLOYEES, schedule);
+    renderLeaveTable(DEMO_EMPLOYEES, { leavePolicy: DEFAULT_LEAVE_POLICY }, schedule, true);
+    renderLeaveLog(DEMO_EMPLOYEES, schedule, true);
+    document.getElementById("prevMonth").disabled = isDemo1;
+    return;
+  }
+
+  document.getElementById("prevMonth").disabled = false;
+  const offset = navIndex - 2;
+  const monthKey = currentMonthKey(offset);
   document.getElementById("monthLabel").textContent = monthLabel(monthKey);
 
   const [employees, config, schedule] = await Promise.all([
@@ -87,48 +133,134 @@ async function loadMonth() {
       : "本月排休仍在協調中，尚未由主管最終核定。";
   }
 
-  renderCalendar(monthKey, activeEmployees, schedule);
-  renderLeaveTable(activeEmployees, config, schedule);
+  const reveal = hasEmployeeSession();
+  renderCalendar(monthKey, activeEmployees, schedule, reveal);
+  renderWarnings(monthKey, activeEmployees, schedule);
+  renderLeaveTable(activeEmployees, config, schedule, reveal);
+  renderLeaveLog(activeEmployees, schedule, reveal);
 }
 
-function renderCalendar(monthKey, employees, schedule) {
+const WEEKDAY_LABELS = ["日", "一", "二", "三", "四", "五", "六"];
+
+function displayLabel(emp, reveal) {
+  const shift = getShiftByCode(emp.shift);
+  const shiftName = shift ? `${shift.code} ${shift.name}` : (emp.shift || "-");
+  if (reveal) return `${emp.alias || emp.lastName + emp.firstName}<br><span class="hint">${shiftName}</span>`;
+  return `${shiftName}`;
+}
+
+function renderCalendar(monthKey, employees, schedule, reveal) {
   const nDays = daysInMonth(monthKey);
-  const table = document.getElementById("calTable");
-  let thead = "<thead><tr><th>員工</th>";
-  for (let d = 1; d <= nDays; d++) thead += `<th>${d}</th>`;
-  thead += "</tr></thead>";
+  const [y, m] = monthKey.split("-").map(Number);
+  const container = document.getElementById("calWeeks");
+  container.innerHTML = "";
 
-  let tbody = "<tbody>";
   if (employees.length === 0) {
-    tbody += `<tr><td colspan="${nDays + 1}" class="hint" style="padding:20px;">尚無員工資料</td></tr>`;
+    container.innerHTML = `<div class="hint" style="padding:14px 0;">尚無員工資料</div>`;
+    return;
   }
-  for (const emp of employees) {
-    const shift = getShiftByCode(emp.shift);
-    const offDays = (schedule?.days?.[emp.id]) || [];
-    const specialLeave = (schedule?.specialLeave || []).filter((r) => r.employeeId === emp.id);
 
-    tbody += `<tr><td class="emp-name">${emp.alias || emp.lastName + emp.firstName}<br><span class="hint">${shift ? shift.name : "-"}</span></td>`;
-    for (let d = 1; d <= nDays; d++) {
-      const dateStr = `${monthKey}-${pad2(d)}`;
-      const isOff = offDays.includes(dateStr);
-      const leaveReq = specialLeave.find((r) => r.date === dateStr);
-      let cellHtml = "";
-      if (leaveReq) {
-        if (leaveReq.status === "approved") cellHtml = `<span class="badge annual">特</span>`;
-        else if (leaveReq.status === "pending") cellHtml = `<span class="badge pending">待</span>`;
-        // rejected 不顯示
-      } else if (isOff) {
-        cellHtml = `<span class="badge off">休</span>`;
-      }
-      tbody += `<td>${cellHtml}</td>`;
+  let d = 1;
+  let weekIndex = 1;
+  while (d <= nDays) {
+    const firstDateOfWeek = new Date(y, m - 1, d);
+    const startDow = firstDateOfWeek.getDay();
+    const weekDates = [];
+    let cursor = d;
+    for (let dow = startDow; dow <= 6 && cursor <= nDays; dow++, cursor++) {
+      weekDates.push(cursor);
     }
-    tbody += "</tr>";
+
+    const block = document.createElement("div");
+    block.className = "cal-scroll";
+    block.style.marginBottom = "18px";
+
+    const firstD = weekDates[0], lastD = weekDates[weekDates.length - 1];
+    const title = document.createElement("h3");
+    title.textContent = `第 ${weekIndex} 週　${m}/${firstD} － ${m}/${lastD}`;
+    container.appendChild(title);
+
+    let thead = "<thead><tr><th>員工</th>";
+    for (const dayNum of weekDates) {
+      const dow = new Date(y, m - 1, dayNum).getDay();
+      thead += `<th>${dayNum}<br><span class="hint">${WEEKDAY_LABELS[dow]}</span></th>`;
+    }
+    thead += "</tr></thead>";
+
+    let tbody = "<tbody>";
+    for (const emp of employees) {
+      const offDays = (schedule?.days?.[emp.id]) || [];
+      const specialLeave = (schedule?.specialLeave || []).filter((r) => r.employeeId === emp.id);
+      tbody += `<tr><td class="emp-name">${displayLabel(emp, reveal)}</td>`;
+      for (const dayNum of weekDates) {
+        const dateStr = `${monthKey}-${pad2(dayNum)}`;
+        const isOff = offDays.includes(dateStr);
+        const leaveReq = specialLeave.find((r) => r.date === dateStr);
+        let cellHtml = "";
+        if (leaveReq) {
+          if (leaveReq.status === "approved") cellHtml = `<span class="badge annual">特</span>`;
+          else if (leaveReq.status === "pending") cellHtml = `<span class="badge pending">待</span>`;
+        } else if (isOff) {
+          cellHtml = `<span class="badge off">休</span>`;
+        }
+        tbody += `<td>${cellHtml}</td>`;
+      }
+      tbody += "</tr>";
+    }
+    tbody += "</tbody>";
+
+    const table = document.createElement("table");
+    table.className = "cal";
+    table.innerHTML = thead + tbody;
+    block.appendChild(table);
+    container.appendChild(block);
+
+    d = lastD + 1;
+    weekIndex++;
   }
-  tbody += "</tbody>";
-  table.innerHTML = thead + tbody;
 }
 
-function renderLeaveTable(employees, config, schedule) {
+// ---------- 人力配置提醒（同一天請休人數 >= 門檻） ----------
+function renderWarnings(monthKey, employees, schedule) {
+  const card = document.getElementById("warningCard");
+  const listEl = document.getElementById("warningList");
+  if (!schedule || employees.length === 0) {
+    card.style.display = "none";
+    return;
+  }
+  const nDays = daysInMonth(monthKey);
+  const lines = [];
+
+  for (let d = 1; d <= nDays; d++) {
+    const dateStr = `${monthKey}-${pad2(d)}`;
+    const offNames = [];
+    for (const emp of employees) {
+      const off = (schedule.days?.[emp.id] || []).includes(dateStr);
+      const approvedLeave = (schedule.specialLeave || []).some(
+        (r) => r.employeeId === emp.id && r.date === dateStr && r.status === "approved"
+      );
+      if (off || approvedLeave) offNames.push(emp.alias || emp.lastName + emp.firstName);
+    }
+    if (offNames.length >= MIN_STAFF_WARNING_THRESHOLD) {
+      lines.push({ day: d, names: offNames });
+    }
+  }
+
+  if (lines.length === 0) {
+    card.style.display = "none";
+    return;
+  }
+  card.style.display = "block";
+  const [, m] = monthKey.split("-");
+  listEl.innerHTML = lines.map((l) =>
+    `<div style="color:var(--danger); font-size:14px; padding:4px 0;">
+      ⚠ ${Number(m)}/${l.day} 人力低於最低配置人力：當天排休有 ${l.names.join("、")}
+    </div>`
+  ).join("");
+}
+
+// ---------- 特休總表 ----------
+function renderLeaveTable(employees, config, schedule, reveal) {
   const policy = config?.leavePolicy || DEFAULT_LEAVE_POLICY;
   const el = document.getElementById("leaveTable");
   if (employees.length === 0) {
@@ -139,22 +271,48 @@ function renderLeaveTable(employees, config, schedule) {
     .map((emp) => {
       const quota = calcAnnualLeaveQuota(emp.hireDate, policy);
       const used = schedule
-        ? schedule.specialLeave?.filter(
-            (r) => r.employeeId === emp.id && r.status === "approved"
-          ).length || 0
+        ? schedule.specialLeave?.filter((r) => r.employeeId === emp.id && r.status === "approved").length || 0
         : 0;
+      const label = reveal
+        ? `${emp.alias || emp.lastName + emp.firstName} <span class="meta">${getShiftByCode(emp.shift)?.name || ""}</span>`
+        : `${getShiftByCode(emp.shift)?.name || emp.shift || "-"}`;
       return `<div class="row-item">
-        <div><strong>${emp.alias || emp.lastName + emp.firstName}</strong> <span class="meta">${getShiftByCode(emp.shift)?.name || ""}</span></div>
-        <div class="meta">到職：${emp.hireDate || "-"} ｜ 總額度 ${quota} 天 ｜ 已用 ${used} 天 ｜ 剩餘 <strong style="color:var(--success)">${Math.max(quota - used, 0)}</strong> 天</div>
+        <div><strong>${label}</strong></div>
+        <div class="meta">總額度 ${quota} 天 ｜ 已用 ${used} 天 ｜ 剩餘 <strong style="color:var(--success)">${Math.max(quota - used, 0)}</strong> 天</div>
       </div>`;
     })
     .join("");
 }
 
-document.getElementById("prevMonth").onclick = () => { monthOffset--; loadMonth(); };
-document.getElementById("nextMonth").onclick = () => { monthOffset++; loadMonth(); };
+// ---------- 特休申請紀錄（誰、何時提交、何時核准） ----------
+function renderLeaveLog(employees, schedule, reveal) {
+  const el = document.getElementById("leaveLog");
+  const list = (schedule?.specialLeave || []).slice().sort((a, b) => (a.date < b.date ? 1 : -1));
+  if (list.length === 0) {
+    el.innerHTML = `<div class="hint">本月尚無特休申請紀錄</div>`;
+    return;
+  }
+  el.innerHTML = list.map((r) => {
+    const emp = employees.find((e) => e.id === r.employeeId);
+    const name = reveal ? (emp ? (emp.alias || emp.lastName + emp.firstName) : r.employeeId) : (emp ? (getShiftByCode(emp.shift)?.name || emp.shift) : "-");
+    const statusLabel = { approved: "已核准", pending: "待審核", rejected: "已駁回" }[r.status] || r.status;
+    const statusClass = { approved: "status-approved", pending: "status-pending", rejected: "status-rejected" }[r.status];
+    const submitted = r.requestedAt ? new Date(r.requestedAt).toLocaleString("zh-TW") : "-";
+    const decided = r.decidedAt ? new Date(r.decidedAt).toLocaleString("zh-TW") : "-";
+    return `<div class="row-item">
+      <div>
+        <strong>${name}</strong> 申請 ${r.date}
+        <div class="meta">提交時間：${submitted}　｜　核准時間：${decided}</div>
+      </div>
+      <span class="status-pill ${statusClass}">${statusLabel}</span>
+    </div>`;
+  }).join("");
+}
 
-loadMonth();
+document.getElementById("prevMonth").onclick = () => { if (navIndex > 0) { navIndex--; loadView(); } };
+document.getElementById("nextMonth").onclick = () => { navIndex++; loadView(); };
+
+loadView();
 </script>
 </body>
 </html>

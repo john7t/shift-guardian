@@ -10,27 +10,23 @@
 <body>
 <div class="wrap">
   <div class="topbar">
-    <div class="brand"><span class="dot"></span>Shift Guardian</div>
+    <div class="brand"><span class="dot"></span><span id="brandName">Shift Guardian</span></div>
     <div class="nav-links">
       <a href="index.html">公開月曆</a>
-      <a href="employee.html" class="active">員工登入</a>
+      <a href="employee.html" class="active" id="navEmployeeLink">員工登入</a>
       <a href="admin.html">主管後台</a>
     </div>
   </div>
 
-  <!-- 尚未登入：手機+啟用碼 或 尚未開通(產生QRCode給主管) -->
-  <div class="card" id="loginCard">
+  <!-- 1. 手機輸入 -->
+  <div class="card" id="screenPhone">
     <h2>員工登入</h2>
     <label>手機號碼</label>
-    <input type="tel" id="loginPhone" placeholder="09xxxxxxxx" />
-    <label>啟用碼</label>
-    <input type="text" id="loginCode" placeholder="xxx-xxx" />
-    <div class="btn-row">
-      <button class="btn btn-primary" id="btnLogin">登入</button>
-    </div>
-    <p class="hint" style="margin-top:14px;">還沒有啟用碼？請主管幫你開通帳號：</p>
-    <details>
-      <summary class="hint" style="cursor:pointer;">產生我的手機 QRCode 給主管掃描 ›</summary>
+    <input type="tel" id="phoneInput" placeholder="09xxxxxxxx" />
+    <div class="btn-row"><button class="btn btn-primary" id="btnPhoneNext">下一步</button></div>
+    <p class="hint" style="margin-top:14px; cursor:pointer; text-decoration:underline;" id="linkForgot">忘記密碼？重設密碼</p>
+    <details style="margin-top:8px;">
+      <summary class="hint" style="cursor:pointer;">還沒有啟用碼？產生我的手機 QRCode 給主管掃描 ›</summary>
       <div style="margin-top:12px;">
         <label>輸入你的手機號碼</label>
         <input type="tel" id="qrPhone" placeholder="09xxxxxxxx" />
@@ -40,8 +36,68 @@
     </details>
   </div>
 
-  <!-- 首次登入：補資料 -->
-  <div class="card" id="setupCard" style="display:none;">
+  <!-- 2. 啟用碼輸入（首次） -->
+  <div class="card" id="screenCode" style="display:none;">
+    <h2>輸入啟用碼</h2>
+    <div class="hint" id="codePhoneLabel"></div>
+    <label>啟用碼</label>
+    <input type="text" id="codeInput" placeholder="xxx-xxx" />
+    <div class="btn-row">
+      <button class="btn btn-primary" id="btnCodeConfirm">確認</button>
+      <button class="btn btn-secondary" id="btnCodeBack">返回</button>
+    </div>
+  </div>
+
+  <!-- 3. 密碼登入（已完成設定的員工） -->
+  <div class="card" id="screenPassword" style="display:none;">
+    <h2>輸入密碼</h2>
+    <div class="hint" id="pwPhoneLabel"></div>
+    <label>4 位數密碼</label>
+    <input type="password" id="pwInput" inputmode="numeric" maxlength="4" placeholder="••••" />
+    <div class="btn-row">
+      <button class="btn btn-primary" id="btnPwLogin">登入</button>
+      <button class="btn btn-secondary" id="btnPwBack">返回</button>
+    </div>
+    <p class="hint" style="margin-top:14px; cursor:pointer; text-decoration:underline;" id="linkForgot2">忘記密碼？重設密碼</p>
+  </div>
+
+  <!-- 4. 閒置鎖定畫面 -->
+  <div class="card" id="screenLock" style="display:none;">
+    <h2>已鎖定，請重新輸入密碼</h2>
+    <div class="hint">閒置一段時間後系統自動鎖定，以保護你的資料。</div>
+    <label>4 位數密碼</label>
+    <input type="password" id="lockPwInput" inputmode="numeric" maxlength="4" placeholder="••••" />
+    <div class="btn-row">
+      <button class="btn btn-primary" id="btnUnlock">解鎖</button>
+      <button class="btn btn-secondary" id="btnLockLogout">登出，切換帳號</button>
+    </div>
+  </div>
+
+  <!-- 5. 忘記密碼 -->
+  <div class="card" id="screenForgot" style="display:none;">
+    <h2>重設密碼</h2>
+    <div id="forgotStep1">
+      <label>手機號碼</label>
+      <input type="tel" id="forgotPhone" placeholder="09xxxxxxxx" />
+      <div class="btn-row">
+        <button class="btn btn-primary" id="btnForgotCheck">查詢</button>
+        <button class="btn btn-secondary" id="btnForgotBack">返回</button>
+      </div>
+    </div>
+    <div id="forgotStep2" style="display:none;">
+      <div class="hint" id="forgotFoundLabel"></div>
+      <label>設定新的 4 位數密碼</label>
+      <input type="password" id="forgotNewPw" inputmode="numeric" maxlength="4" placeholder="••••" />
+      <div class="btn-row">
+        <button class="btn btn-primary" id="btnForgotSubmit">送出，傳LINE給主管確認</button>
+      </div>
+      <p class="hint">傳送後需經主管確認「確實是本人」才會生效，請耐心等候。</p>
+    </div>
+    <div id="forgotPendingNote" class="hint" style="display:none; margin-top:10px;"></div>
+  </div>
+
+  <!-- 6. 首次登入設定資料 -->
+  <div class="card" id="screenSetup" style="display:none;">
     <h2>首次登入 — 設定基本資料</h2>
     <label>姓</label><input type="text" id="setLastName" />
     <label>名</label><input type="text" id="setFirstName" />
@@ -49,13 +105,26 @@
     <label>班別</label>
     <select id="setShift"></select>
     <label>到職日</label><input type="date" id="setHireDate" />
+    <label>設定 4 位數密碼（之後登入用）</label>
+    <input type="password" id="setPassword" inputmode="numeric" maxlength="4" placeholder="••••" />
+    <label>再輸入一次密碼</label>
+    <input type="password" id="setPassword2" inputmode="numeric" maxlength="4" placeholder="••••" />
     <div class="btn-row">
-      <button class="btn btn-primary" id="btnSubmitSetup">產生連結傳送給主管確認</button>
+      <button class="btn btn-primary" id="btnSubmitSetup">送出</button>
     </div>
-    <p class="hint" style="margin-top:10px;">此資料需經主管確認寫入後才正式生效。</p>
   </div>
 
-  <!-- 主畫面 -->
+  <!-- 7. 已送出、待主管核准（灰階鎖定顯示） -->
+  <div class="card" id="screenPendingRegister" style="display:none;">
+    <h2>已送出，待主管確認</h2>
+    <div id="pendingRegisterView" class="row-list"></div>
+    <div class="btn-row">
+      <button class="btn btn-line" id="btnResendRegister">重新傳LINE給主管</button>
+      <button class="btn btn-secondary" id="btnDirectAdminFromRegister" style="display:none;">直接前往主管頁處理</button>
+    </div>
+  </div>
+
+  <!-- 8. 主畫面 -->
   <div id="mainPanel" style="display:none;">
     <div class="card">
       <h2>我的資料</h2>
@@ -65,17 +134,27 @@
 
     <div class="card">
       <h2>排定下月休假（需選滿 <span id="reqDaysNum"></span> 天）</h2>
-      <div class="hint">點選日期切換選取，藍色框代表其他人已排休/請特休。選好後產生連結傳給主管確認上線。</div>
-      <div class="day-grid" id="offDayGrid" style="margin-top:12px;"></div>
-      <div class="hint" style="margin-top:8px;">已選 <strong id="selectedCount">0</strong> / <span id="reqDaysNum2"></span> 天</div>
-      <div class="btn-row">
-        <button class="btn btn-primary" id="btnSendOffDays">產生連結並傳LINE給主管</button>
+      <div id="offDaysEditArea">
+        <div class="hint">點選日期切換選取，藍色框代表其他人已排休/請特休。選好後產生連結傳給主管確認上線。</div>
+        <div class="day-grid" id="offDayGrid" style="margin-top:12px;"></div>
+        <div class="hint" style="margin-top:8px;">已選 <strong id="selectedCount">0</strong> / <span id="reqDaysNum2"></span> 天</div>
+        <div class="btn-row">
+          <button class="btn btn-primary" id="btnSendOffDays">產生連結並傳LINE給主管</button>
+        </div>
+      </div>
+      <div id="offDaysPendingArea" style="display:none;">
+        <div class="hint">已送出，待主管確認上線：</div>
+        <div class="day-grid" id="offDayGridPending" style="margin-top:12px;"></div>
+        <div class="btn-row">
+          <button class="btn btn-secondary" id="btnResendOffDays">重新傳LINE給主管</button>
+        </div>
       </div>
     </div>
 
     <div class="card">
       <h2>申請特休</h2>
       <div id="leaveBalanceInfo" class="hint" style="margin-bottom:10px;"></div>
+      <div id="pendingLeaveList" class="row-list" style="margin-bottom:10px;"></div>
       <label>選擇日期</label>
       <input type="date" id="annualLeaveDate" />
       <div class="btn-row">
@@ -91,11 +170,18 @@
 <script src="js/github-api.js"></script>
 <script src="js/leave-calc.js"></script>
 <script>
-let session = null; // { employeeId, phone, code }
 let employeesCache = [];
 let currentEmployee = null;
 let scheduleCache = null;
+let configCache = null;
 let targetMonthKey = currentMonthKey(1); // 排休預設排「下個月」
+let pendingPhoneForCode = null;
+let pendingPhoneForPw = null;
+
+function showScreen(id) {
+  ["screenPhone","screenCode","screenPassword","screenLock","screenForgot","screenSetup","screenPendingRegister","mainPanel"]
+    .forEach((s) => document.getElementById(s).style.display = (s === id) ? "block" : "none");
+}
 
 function initShiftOptions() {
   const sel = document.getElementById("setShift");
@@ -105,6 +191,12 @@ initShiftOptions();
 document.getElementById("reqDaysNum").textContent = MONTHLY_OFF_DAYS_REQUIRED;
 document.getElementById("reqDaysNum2").textContent = MONTHLY_OFF_DAYS_REQUIRED;
 
+async function loadBrand() {
+  const config = await readJSON("data/config.json").catch(() => null);
+  document.getElementById("brandName").textContent = (config && config.storeName) ? config.storeName : "Shift Guardian";
+}
+loadBrand();
+
 // ---------- QRCode ----------
 document.getElementById("btnGenQr").onclick = () => {
   const phone = document.getElementById("qrPhone").value.trim();
@@ -112,66 +204,216 @@ document.getElementById("btnGenQr").onclick = () => {
   renderQRCode("qrcode", phone);
 };
 
-// ---------- 登入 ----------
-document.getElementById("btnLogin").onclick = async () => {
-  const phone = document.getElementById("loginPhone").value.trim();
-  const code = document.getElementById("loginCode").value.trim();
-  if (!phone || !code) return toast("請輸入手機與啟用碼", "error");
+// ---------- 手機輸入 → 判斷下一步 ----------
+document.getElementById("btnPhoneNext").onclick = async () => {
+  const phone = document.getElementById("phoneInput").value.trim();
+  if (!phone) return toast("請輸入手機號碼", "error");
 
-  const employees = await readJSON("data/employees.json").catch(() => []);
-  employeesCache = employees || [];
-  const emp = employeesCache.find((e) => e.phone === phone && e.activationCode === code);
+  employeesCache = (await readJSON("data/employees.json").catch(() => [])) || [];
+  const emp = employeesCache.find((e) => e.phone === phone);
 
-  if (!emp) return toast("手機或啟用碼不正確", "error");
+  if (phone === ADMIN_BYPASS_PHONE) {
+    if (emp && emp.status === "active") {
+      currentEmployee = emp;
+      setSession(emp.id, phone);
+      return showMainPanel();
+    }
+    currentEmployee = emp || { id: generateEmployeeId(), phone, status: "issued" };
+    setSession(currentEmployee.id, phone);
+    return enterSetupOrPendingScreen();
+  }
+
+  if (!emp) return toast("查無此手機號碼，請先請主管開通帳號", "error");
   if (emp.status === "resigned") return toast("此帳號已離職，無法登入", "error");
 
-  session = { employeeId: emp.id, phone, code };
-  localStorage.setItem(LS_KEY_EMPLOYEE_SESSION, JSON.stringify(session));
-  currentEmployee = emp;
-
   if (emp.status === "issued") {
-    document.getElementById("loginCard").style.display = "none";
-    document.getElementById("setupCard").style.display = "block";
+    pendingPhoneForCode = phone;
+    document.getElementById("codePhoneLabel").textContent = `手機：${phone}`;
+    document.getElementById("codeInput").value = "";
+    showScreen("screenCode");
   } else {
-    showMainPanel();
+    pendingPhoneForPw = phone;
+    document.getElementById("pwPhoneLabel").textContent = `手機：${phone}（${emp.alias || emp.firstName || ""}）`;
+    document.getElementById("pwInput").value = "";
+    showScreen("screenPassword");
   }
 };
 
-// ---------- 首次設定送出 ----------
-document.getElementById("btnSubmitSetup").onclick = () => {
+document.getElementById("btnCodeBack").onclick = () => showScreen("screenPhone");
+document.getElementById("btnPwBack").onclick = () => showScreen("screenPhone");
+
+// ---------- 啟用碼確認 ----------
+document.getElementById("btnCodeConfirm").onclick = () => {
+  const code = document.getElementById("codeInput").value.trim();
+  const emp = employeesCache.find((e) => e.phone === pendingPhoneForCode);
+  if (!emp || emp.activationCode !== code) return toast("啟用碼不正確", "error");
+  currentEmployee = emp;
+  setSession(emp.id, emp.phone);
+  enterSetupOrPendingScreen();
+};
+
+// ---------- 密碼登入 ----------
+document.getElementById("btnPwLogin").onclick = async () => {
+  const pw = document.getElementById("pwInput").value.trim();
+  if (!/^\d{4}$/.test(pw)) return toast("請輸入4位數字密碼", "error");
+  const emp = employeesCache.find((e) => e.phone === pendingPhoneForPw);
+  const hash = await hashText(pw);
+  if (!emp || emp.passwordHash !== hash) return toast("密碼不正確", "error");
+  currentEmployee = emp;
+  setSession(emp.id, emp.phone);
+  showMainPanel();
+};
+
+// ---------- session / 閒置鎖定 ----------
+function setSession(employeeId, phone) {
+  localStorage.setItem(LS_KEY_EMPLOYEE_SESSION, JSON.stringify({ employeeId, phone }));
+  localStorage.setItem(LS_KEY_EMPLOYEE_UNLOCKED_AT, String(Date.now()));
+}
+
+function touchActivity() {
+  if (currentEmployee) localStorage.setItem(LS_KEY_EMPLOYEE_UNLOCKED_AT, String(Date.now()));
+}
+["click", "keydown", "touchstart"].forEach((ev) => document.addEventListener(ev, touchActivity));
+
+document.getElementById("btnUnlock").onclick = async () => {
+  const pw = document.getElementById("lockPwInput").value.trim();
+  if (currentEmployee.phone === ADMIN_BYPASS_PHONE) {
+    localStorage.setItem(LS_KEY_EMPLOYEE_UNLOCKED_AT, String(Date.now()));
+    return showMainPanel();
+  }
+  const hash = await hashText(pw);
+  if (currentEmployee.passwordHash !== hash) return toast("密碼不正確", "error");
+  localStorage.setItem(LS_KEY_EMPLOYEE_UNLOCKED_AT, String(Date.now()));
+  showMainPanel();
+};
+document.getElementById("btnLockLogout").onclick = doLogout;
+
+// ---------- 忘記密碼 ----------
+document.getElementById("linkForgot").onclick = () => { showScreen("screenForgot"); resetForgotForm(); };
+document.getElementById("linkForgot2").onclick = () => { showScreen("screenForgot"); resetForgotForm(); };
+document.getElementById("btnForgotBack").onclick = () => showScreen("screenPhone");
+
+let forgotEmp = null;
+function resetForgotForm() {
+  document.getElementById("forgotStep1").style.display = "block";
+  document.getElementById("forgotStep2").style.display = "none";
+  document.getElementById("forgotPendingNote").style.display = "none";
+  document.getElementById("forgotPhone").value = "";
+}
+
+document.getElementById("btnForgotCheck").onclick = async () => {
+  const phone = document.getElementById("forgotPhone").value.trim();
+  if (!phone) return toast("請輸入手機號碼", "error");
+  employeesCache = (await readJSON("data/employees.json").catch(() => [])) || [];
+  forgotEmp = employeesCache.find((e) => e.phone === phone && e.status === "active");
+  if (!forgotEmp) return toast("查無此手機的有效帳號", "error");
+
+  const localPending = JSON.parse(localStorage.getItem("sg_forgot_pending_" + phone) || "null");
+  document.getElementById("forgotFoundLabel").textContent = `找到帳號：${forgotEmp.alias || forgotEmp.firstName || phone}`;
+  document.getElementById("forgotStep1").style.display = "none";
+  document.getElementById("forgotStep2").style.display = "block";
+  if (localPending) {
+    document.getElementById("forgotPendingNote").style.display = "block";
+    document.getElementById("forgotPendingNote").textContent = `已於 ${localPending.submittedAt} 送出重設申請，尚待主管確認。你也可以再送出一次覆蓋先前的申請。`;
+  }
+};
+
+document.getElementById("btnForgotSubmit").onclick = () => {
+  const newPw = document.getElementById("forgotNewPw").value.trim();
+  if (!/^\d{4}$/.test(newPw)) return toast("請輸入4位數字密碼", "error");
+  hashText(newPw).then((hash) => {
+    const payload = { type: "reset_password", employeeId: forgotEmp.id, phone: forgotEmp.phone, newPasswordHash: hash };
+    localStorage.setItem("sg_forgot_pending_" + forgotEmp.phone, JSON.stringify({ submittedAt: new Date().toLocaleString() }));
+    const name = forgotEmp.alias || forgotEmp.firstName;
+    sendToManager(payload, `${name}（${forgotEmp.phone}）申請重設密碼，請主管確認本人身份後核准。`);
+    toast("已送出重設申請，請等主管確認", "success");
+  });
+};
+
+// ---------- 首次設定 ----------
+function enterSetupOrPendingScreen() {
+  const pending = getAllPending(currentEmployee.id);
+  if (pending.register) {
+    renderPendingRegister(pending.register.payload, pending.register.submittedAt);
+    showScreen("screenPendingRegister");
+  } else {
+    showScreen("screenSetup");
+  }
+}
+
+document.getElementById("btnSubmitSetup").onclick = async () => {
   const lastName = document.getElementById("setLastName").value.trim();
   const firstName = document.getElementById("setFirstName").value.trim();
   let alias = document.getElementById("setAlias").value.trim();
   const shift = document.getElementById("setShift").value;
   const hireDate = document.getElementById("setHireDate").value;
+  const pw1 = document.getElementById("setPassword").value.trim();
+  const pw2 = document.getElementById("setPassword2").value.trim();
 
   if (!lastName || !firstName || !hireDate) return toast("姓、名、到職日為必填", "error");
+  if (!/^\d{4}$/.test(pw1)) return toast("密碼需為4位數字", "error");
+  if (pw1 !== pw2) return toast("兩次密碼輸入不一致", "error");
   if (!alias) alias = firstName.slice(-1);
 
+  const passwordHash = await hashText(pw1);
   const payload = {
     type: "register",
-    employeeId: session.employeeId,
-    phone: session.phone,
-    lastName, firstName, alias, shift, hireDate,
+    employeeId: currentEmployee.id,
+    phone: currentEmployee.phone,
+    lastName, firstName, alias, shift, hireDate, passwordHash,
+    isBypassAdmin: currentEmployee.phone === ADMIN_BYPASS_PHONE,
   };
+  savePending(currentEmployee.id, "register", payload);
+  renderPendingRegister(payload, new Date().toLocaleString());
+  showScreen("screenPendingRegister");
   sendToManager(payload, `${lastName}${firstName}（${alias}）完成首次登入設定，班別：${shift}，到職日：${hireDate}，請主管確認寫入系統。`);
+};
+
+function renderPendingRegister(payload, submittedAt) {
+  document.getElementById("pendingRegisterView").innerHTML = `
+    <div class="row-item" style="opacity:0.6;">
+      <div>
+        <strong>${payload.lastName}${payload.firstName}（${payload.alias}）</strong>
+        <div class="meta">班別：${getShiftByCode(payload.shift)?.name || payload.shift}｜到職日：${payload.hireDate}｜送出時間：${submittedAt}</div>
+      </div>
+      <span class="status-pill status-pending">待主管確認</span>
+    </div>`;
+  document.getElementById("btnDirectAdminFromRegister").style.display = payload.isBypassAdmin ? "inline-flex" : "none";
+}
+
+document.getElementById("btnResendRegister").onclick = () => {
+  const pending = getAllPending(currentEmployee.id);
+  if (!pending.register) return;
+  const p = pending.register.payload;
+  sendToManager(p, `${p.lastName}${p.firstName}（${p.alias}）的首次登入設定尚待確認，請主管確認寫入系統。`);
+};
+document.getElementById("btnDirectAdminFromRegister").onclick = () => {
+  const pending = getAllPending(currentEmployee.id);
+  if (!pending.register) return;
+  const encoded = encodePayload(pending.register.payload);
+  location.href = `admin.html?apply=${encoded}`;
 };
 
 // ---------- 顯示主畫面 ----------
 async function showMainPanel() {
-  document.getElementById("loginCard").style.display = "none";
-  document.getElementById("setupCard").style.display = "none";
-  document.getElementById("mainPanel").style.display = "block";
+  showScreen("mainPanel");
+  document.getElementById("navEmployeeLink").textContent = currentEmployee.alias || currentEmployee.firstName || "員工登入";
 
-  const config = await readJSON("data/config.json").catch(() => null);
+  configCache = await readJSON("data/config.json").catch(() => null);
+  employeesCache = (await readJSON("data/employees.json").catch(() => [])) || [];
+  const freshEmp = employeesCache.find((e) => e.id === currentEmployee.id);
+  if (freshEmp) currentEmployee = freshEmp;
+  clearPending(currentEmployee.id, "register");
+
   scheduleCache = await readJSON(`data/schedule-${targetMonthKey}.json`).catch(() => null);
   const activeEmployees = employeesCache.filter((e) => e.status === "active" || e.id === currentEmployee.id);
 
   const shift = getShiftByCode(currentEmployee.shift);
+  const roleTag = currentEmployee.isManager || currentEmployee.phone === ADMIN_BYPASS_PHONE ? "｜<strong style='color:var(--dawn)'>主管權限</strong>" : "";
   document.getElementById("myInfo").innerHTML =
-    `${currentEmployee.lastName || ""}${currentEmployee.firstName || ""}（代號：${currentEmployee.alias || "-"}）｜班別：${shift ? shift.name : currentEmployee.shift}｜到職日：${currentEmployee.hireDate || "-"}`;
+    `${currentEmployee.lastName || ""}${currentEmployee.firstName || ""}（代號：${currentEmployee.alias || "-"}）｜班別：${shift ? shift.name : currentEmployee.shift}｜到職日：${currentEmployee.hireDate || "-"}${roleTag}`;
 
-  const policy = config?.leavePolicy || DEFAULT_LEAVE_POLICY;
+  const policy = configCache?.leavePolicy || DEFAULT_LEAVE_POLICY;
   const quota = calcAnnualLeaveQuota(currentEmployee.hireDate, policy);
   const used = scheduleCache
     ? (scheduleCache.specialLeave || []).filter((r) => r.employeeId === currentEmployee.id && r.status === "approved").length
@@ -179,10 +421,51 @@ async function showMainPanel() {
   document.getElementById("leaveBalanceInfo").textContent =
     `特休總額度 ${quota} 天，已用 ${used} 天，剩餘 ${Math.max(quota - used, 0)} 天`;
 
+  renderOffDaysSection(activeEmployees);
+  renderLeaveSection();
+}
+
+// ---------- 排休（含 pending 灰階鎖定顯示） ----------
+let selectedDays = new Set();
+
+function renderOffDaysSection(activeEmployees) {
+  const pending = getAllPending(currentEmployee.id);
+  const pendingKey = "off_days_" + targetMonthKey;
+  const remoteDates = ((scheduleCache?.days?.[currentEmployee.id]) || []).slice().sort();
+
+  if (pending[pendingKey]) {
+    const pendingDates = pending[pendingKey].payload.dates.slice().sort();
+    const sameAsRemote = JSON.stringify(pendingDates) === JSON.stringify(remoteDates);
+    if (sameAsRemote && remoteDates.length > 0) {
+      clearPending(currentEmployee.id, pendingKey);
+    } else {
+      document.getElementById("offDaysEditArea").style.display = "none";
+      document.getElementById("offDaysPendingArea").style.display = "block";
+      renderGrid("offDayGridPending", pendingDates, true);
+      document.getElementById("btnResendOffDays").onclick = () => {
+        sendToManager(pending[pendingKey].payload, `${currentEmployee.alias} 的 ${targetMonthKey} 排休尚待確認（${pendingDates.join(", ")}）。`);
+      };
+      return;
+    }
+  }
+
+  document.getElementById("offDaysEditArea").style.display = "block";
+  document.getElementById("offDaysPendingArea").style.display = "none";
   renderOffDayGrid(activeEmployees);
 }
 
-let selectedDays = new Set();
+function renderGrid(elId, markedDates, disabled) {
+  const nDays = daysInMonth(targetMonthKey);
+  const grid = document.getElementById(elId);
+  grid.innerHTML = "";
+  for (let d = 1; d <= nDays; d++) {
+    const dateStr = `${targetMonthKey}-${pad2(d)}`;
+    const cell = document.createElement("div");
+    cell.className = "day-cell" + (markedDates.includes(dateStr) ? " selected" : "") + (disabled ? " disabled" : "");
+    cell.textContent = d;
+    grid.appendChild(cell);
+  }
+}
 
 function renderOffDayGrid(activeEmployees) {
   const nDays = daysInMonth(targetMonthKey);
@@ -197,7 +480,6 @@ function renderOffDayGrid(activeEmployees) {
     cell.className = "day-cell";
     cell.textContent = d;
 
-    // 是否有其他人已排休/特休這天
     const takenByOthers = activeEmployees.some((e) => {
       if (e.id === currentEmployee.id) return false;
       const off = (scheduleCache?.days?.[e.id]) || [];
@@ -235,21 +517,49 @@ document.getElementById("btnSendOffDays").onclick = () => {
     month: targetMonthKey,
     dates: Array.from(selectedDays).sort(),
   };
+  savePending(currentEmployee.id, "off_days_" + targetMonthKey, payload);
   const name = currentEmployee.alias || currentEmployee.firstName;
   sendToManager(payload, `${name} 更新了 ${targetMonthKey} 的排休（${payload.dates.join(", ")}），請主管確認上線。`);
+  document.getElementById("offDaysEditArea").style.display = "none";
+  document.getElementById("offDaysPendingArea").style.display = "block";
+  renderGrid("offDayGridPending", payload.dates, true);
 };
+
+// ---------- 特休申請（含 pending 清單） ----------
+function renderLeaveSection() {
+  const pending = getAllPending(currentEmployee.id);
+  const leaveKeys = Object.keys(pending).filter((k) => k.startsWith("leave_"));
+  const remoteLeave = (scheduleCache?.specialLeave || []).filter((r) => r.employeeId === currentEmployee.id);
+
+  leaveKeys.forEach((k) => {
+    const reqId = pending[k].payload.requestId;
+    if (remoteLeave.some((r) => r.id === reqId)) clearPending(currentEmployee.id, k);
+  });
+
+  const stillPending = Object.keys(getAllPending(currentEmployee.id)).filter((k) => k.startsWith("leave_"));
+  const listEl = document.getElementById("pendingLeaveList");
+  if (stillPending.length === 0) {
+    listEl.innerHTML = "";
+  } else {
+    listEl.innerHTML = stillPending.map((k) => {
+      const p = getAllPending(currentEmployee.id)[k].payload;
+      return `<div class="row-item" style="opacity:0.6;">
+        <div>特休申請：${p.date}</div>
+        <span class="status-pill status-pending">待主管確認</span>
+      </div>`;
+    }).join("");
+  }
+}
 
 document.getElementById("btnApplyAnnual").onclick = () => {
   const date = document.getElementById("annualLeaveDate").value;
   if (!date) return toast("請選擇日期", "error");
-  const payload = {
-    type: "leave_request",
-    employeeId: currentEmployee.id,
-    date,
-    requestId: generateRequestId(),
-  };
+  const requestId = generateRequestId();
+  const payload = { type: "leave_request", employeeId: currentEmployee.id, date, requestId };
+  savePending(currentEmployee.id, "leave_" + requestId, payload);
   const name = currentEmployee.alias || currentEmployee.firstName;
   sendToManager(payload, `${name} 申請 ${date} 特休，請主管審核。`);
+  renderLeaveSection();
 };
 
 // ---------- 產生連結並開啟 LINE ----------
@@ -261,31 +571,54 @@ function sendToManager(payload, messagePrefix) {
   toast("已產生連結，請在 LINE 視窗選擇要傳送給主管的對話", "success");
 }
 
-document.getElementById("btnLogout").onclick = () => {
+function doLogout() {
   localStorage.removeItem(LS_KEY_EMPLOYEE_SESSION);
-  location.reload();
-};
+  localStorage.removeItem(LS_KEY_EMPLOYEE_UNLOCKED_AT);
+  currentEmployee = null;
+  document.getElementById("navEmployeeLink").textContent = "員工登入";
+  location.href = "employee.html";
+}
+document.getElementById("btnLogout").onclick = doLogout;
 
-// ---------- 自動登入（若已有 session） ----------
+// ---------- 自動登入 / 閒置鎖定判斷 ----------
 (async function tryAutoLogin() {
   const saved = localStorage.getItem(LS_KEY_EMPLOYEE_SESSION);
   if (!saved) return;
-  session = JSON.parse(saved);
-  const employees = await readJSON("data/employees.json").catch(() => []);
-  employeesCache = employees || [];
+  const session = JSON.parse(saved);
+  employeesCache = (await readJSON("data/employees.json").catch(() => [])) || [];
   const emp = employeesCache.find((e) => e.id === session.employeeId);
-  if (!emp || emp.status === "resigned") {
-    localStorage.removeItem(LS_KEY_EMPLOYEE_SESSION);
+
+  if (!emp) {
+    if (session.phone === ADMIN_BYPASS_PHONE) {
+      currentEmployee = { id: session.employeeId, phone: session.phone, status: "issued" };
+      return enterSetupOrPendingScreen();
+    }
+    doLogout();
     return;
   }
+  if (emp.status === "resigned") { doLogout(); return; }
   currentEmployee = emp;
+
   if (emp.status === "issued") {
-    document.getElementById("loginCard").style.display = "none";
-    document.getElementById("setupCard").style.display = "block";
-  } else {
-    showMainPanel();
+    return enterSetupOrPendingScreen();
   }
+
+  const unlockedAt = Number(localStorage.getItem(LS_KEY_EMPLOYEE_UNLOCKED_AT) || 0);
+  if (emp.phone !== ADMIN_BYPASS_PHONE && Date.now() - unlockedAt > IDLE_TIMEOUT_MS) {
+    showScreen("screenLock");
+    return;
+  }
+  showMainPanel();
 })();
+
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState !== "visible" || !currentEmployee) return;
+  if (currentEmployee.phone === ADMIN_BYPASS_PHONE) return;
+  const unlockedAt = Number(localStorage.getItem(LS_KEY_EMPLOYEE_UNLOCKED_AT) || 0);
+  if (Date.now() - unlockedAt > IDLE_TIMEOUT_MS && document.getElementById("mainPanel").style.display === "block") {
+    showScreen("screenLock");
+  }
+});
 </script>
 </body>
 </html>
