@@ -1,7 +1,7 @@
 // ============================================
 // 全域設定
 // ============================================
-const GITHUB_OWNER = "YOUR_GITHUB_USERNAME"; // TODO: 改成你的 GitHub 帳號
+const GITHUB_OWNER = "john7t"; // TODO: 改成你的 GitHub 帳號
 const REPO_NAME = "shift-guardian";          // repo 名稱
 const REPO_BRANCH = "main";
 
