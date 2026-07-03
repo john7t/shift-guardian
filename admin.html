@@ -67,9 +67,25 @@
     <!-- 主管權限管理 -->
     <div class="card">
       <h2>主管權限管理</h2>
-      <p class="hint">勾選的員工將可在主管後台通過「檢查權限」，並自行輸入 Token 進行審核與寫入。</p>
+      <p class="hint">勾選的員工將可在主管後台通過「檢查權限」，並自行輸入 Token 進行審核與寫入。系統管理員帳號永遠擁有主管權限，不受此設定影響。</p>
       <div class="row-list" id="managerList"></div>
       <div class="btn-row"><button class="btn btn-primary" id="btnSaveManagers">儲存主管權限設定</button></div>
+    </div>
+
+    <!-- 支援排班登記 -->
+    <div class="card">
+      <h2>支援排班登記</h2>
+      <p class="hint">當某班別當天人力短缺，可指定另一位當天有上班的員工支援，會顯示在他自己那天的格子上（例如「支A1」），不影響他原本的班別記錄。</p>
+      <label>支援月份</label>
+      <input type="text" id="supportMonth" placeholder="例如 2026-07" />
+      <label>支援人員</label>
+      <select id="supportEmployee"></select>
+      <label>支援日期</label>
+      <input type="date" id="supportDate" />
+      <label>支援班別</label>
+      <select id="supportShift"></select>
+      <div class="btn-row"><button class="btn btn-primary" id="btnAddSupport">新增支援登記</button></div>
+      <div id="supportList" class="row-list" style="margin-top:14px;"></div>
     </div>
 
     <!-- 本月排休鎖定 -->
@@ -133,14 +149,16 @@ let adminMonthOffset = 0;
 let currentAdminEmployee = null; // 通過權限檢查的那位員工（本機 employee.html session）
 
 // ---------- 權限檢查 ----------
-document.getElementById("btnCheckPerm").onclick = async () => {
+async function checkPermission(silent) {
   const saved = localStorage.getItem(LS_KEY_EMPLOYEE_SESSION);
   const errEl = document.getElementById("permError");
   errEl.style.display = "none";
 
   if (!saved) {
-    errEl.textContent = "請先在「員工登入」頁面登入後再檢查。";
-    errEl.style.display = "block";
+    if (!silent) {
+      errEl.textContent = "請先在「員工登入」頁面登入後再檢查。";
+      errEl.style.display = "block";
+    }
     return;
   }
   const session = JSON.parse(saved);
@@ -154,18 +172,27 @@ document.getElementById("btnCheckPerm").onclick = async () => {
   employeesCache = (await readJSON("data/employees.json").catch(() => [])) || [];
   const emp = employeesCache.find((e) => e.id === session.employeeId);
   if (!emp) {
-    errEl.textContent = "找不到你的員工資料，請確認已完成首次登入設定並經主管核准。";
-    errEl.style.display = "block";
+    if (!silent) {
+      errEl.textContent = "找不到你的員工資料，請確認已完成首次登入設定並經主管核准。";
+      errEl.style.display = "block";
+    }
     return;
   }
   if (!emp.isManager) {
-    errEl.textContent = `此帳號（${emp.alias || emp.firstName || emp.phone}）目前沒有主管權限，請請現任主管在「主管權限管理」加開。`;
-    errEl.style.display = "block";
+    if (!silent) {
+      errEl.textContent = `此帳號（${emp.alias || emp.firstName || emp.phone}）目前沒有主管權限，請請現任主管在「主管權限管理」加開。`;
+      errEl.style.display = "block";
+    }
     return;
   }
   currentAdminEmployee = emp;
   grantAccess();
-};
+}
+
+document.getElementById("btnCheckPerm").onclick = () => checkPermission(false);
+
+// 頁面載入時，如果先前已經通過檢查，自動幫你重新驗證一次（不用每次切頁都手動點）
+checkPermission(true);
 
 function grantAccess() {
   document.getElementById("permCard").style.display = "none";
@@ -222,7 +249,6 @@ function requireToken() {
 
 // ---------- 開機 ----------
 async function boot() {
-  document.getElementById("adminBypassPhoneLabel").textContent = ADMIN_BYPASS_PHONE;
   restoreTokenUI();
   await loadEmployees();
   await loadConfig();
@@ -230,6 +256,7 @@ async function boot() {
   document.getElementById("storeNameInput").value = configCache.storeName || "";
   checkIncomingApply();
   await loadMonthAdmin();
+  initSupportSection();
 }
 
 async function loadEmployees() {
@@ -246,14 +273,14 @@ function renderEmployeeList() {
   }
   el.innerHTML = employeesCache
     .map((e) => {
-      const shift = getShiftByCode(e.shift);
       const statusLabel = { issued: "待完成登入", active: "使用中", resigned: "已離職" }[e.status] || e.status;
       const statusClass = { issued: "status-pending", active: "status-approved", resigned: "status-rejected" }[e.status];
       const mgrTag = e.isManager ? ` <span class="status-pill status-locked">主管</span>` : "";
+      const noScheduleTag = e.noSchedule ? ` <span class="status-pill status-pending">免排班</span>` : "";
       return `<div class="row-item">
         <div>
-          <strong>${e.alias || (e.lastName || "") + (e.firstName || "") || "(未設定姓名)"}</strong>${mgrTag}
-          <span class="meta">${e.phone} ｜ 啟用碼 ${e.activationCode || "-"} ｜ ${shift ? shift.name : e.shift || "未選班別"}</span>
+          <strong>${e.alias || (e.lastName || "") + (e.firstName || "") || "(未設定姓名)"}</strong>${mgrTag}${noScheduleTag}
+          <span class="meta">${e.phone} ｜ 啟用碼 ${e.activationCode || "-"} ｜ ${e.shift ? getShiftLabel(e.shift) : "未選班別"}</span>
         </div>
         <div style="display:flex; align-items:center; gap:8px;">
           <span class="status-pill ${statusClass}">${statusLabel}</span>
@@ -275,7 +302,7 @@ function renderManagerList() {
   el.innerHTML = activeEmployees.map((e) => `
     <label style="display:flex; align-items:center; gap:8px; background:var(--surface-2); border:1px solid var(--line); border-radius:8px; padding:10px 12px; margin:0;">
       <input type="checkbox" data-empid="${e.id}" ${e.isManager ? "checked" : ""} style="width:auto;" />
-      <span>${e.alias || e.firstName}（${e.phone}）${getShiftByCode(e.shift)?.name ? " ｜ " + getShiftByCode(e.shift).name : ""}</span>
+      <span>${e.alias || e.firstName}（${e.phone}） ｜ ${getShiftLabel(e.shift)}</span>
     </label>
   `).join("");
 }
@@ -473,7 +500,7 @@ function renderApplyPreview() {
     box.innerHTML = `<div class="row-item">
       <div>
         <strong>員工首次登入設定${p.isBypassAdmin ? "（管理員帳號）" : ""}</strong>
-        <div class="meta">手機：${p.phone}｜姓名：${p.lastName}${p.firstName}｜代號：${p.alias}｜班別：${getShiftByCode(p.shift)?.name || p.shift}｜到職日：${p.hireDate}</div>
+        <div class="meta">手機：${p.phone}｜姓名：${p.lastName}${p.firstName}｜代號：${p.alias}｜班別：${getShiftLabel(p.shift)}｜到職日：${p.hireDate}</div>
       </div>
     </div>`;
   } else if (pendingPayload.type === "off_days") {
@@ -533,6 +560,7 @@ document.getElementById("btnApprove").onclick = async () => {
       Object.assign(emp, {
         lastName: p.lastName, firstName: p.firstName, alias: p.alias,
         shift: p.shift, hireDate: p.hireDate, passwordHash: p.passwordHash,
+        noSchedule: !!p.noSchedule,
         status: "active",
         isManager: emp.isManager || grantManager,
       });
@@ -578,6 +606,73 @@ document.getElementById("btnApprove").onclick = async () => {
     errEl.style.display = "block";
   }
 };
+
+// ---------- 支援排班登記 ----------
+function initSupportSection() {
+  document.getElementById("supportMonth").value = currentMonthKey(0);
+  const empSel = document.getElementById("supportEmployee");
+  const activeEmployees = employeesCache.filter((e) => e.status === "active" && !e.noSchedule);
+  empSel.innerHTML = activeEmployees.map((e) => `<option value="${e.id}">${e.alias || e.firstName}（${getShiftLabel(e.shift)}）</option>`).join("");
+  const shiftSel = document.getElementById("supportShift");
+  shiftSel.innerHTML = SHIFTS.map((s) => `<option value="${s.code}">${s.code} ${s.name}</option>`).join("");
+  loadSupportList();
+}
+
+async function loadSupportList() {
+  const monthKey = document.getElementById("supportMonth").value.trim() || currentMonthKey(0);
+  const schedule = await readJSON(`data/schedule-${monthKey}.json`).catch(() => null);
+  const list = (schedule?.support) || [];
+  const el = document.getElementById("supportList");
+  if (list.length === 0) {
+    el.innerHTML = `<div class="hint">本月尚無支援登記</div>`;
+    return;
+  }
+  el.innerHTML = list.map((r) => {
+    const emp = employeesCache.find((e) => e.id === r.employeeId);
+    const name = emp ? (emp.alias || emp.firstName) : r.employeeId;
+    return `<div class="row-item">
+      <div>${name}　${r.date}　支援 ${getShiftLabel(r.supportShift)}</div>
+      <button class="btn btn-danger" style="padding:6px 10px; font-size:12px;" onclick="removeSupport('${monthKey}','${r.id}')">刪除</button>
+    </div>`;
+  }).join("");
+}
+
+document.getElementById("supportMonth").addEventListener("change", loadSupportList);
+
+document.getElementById("btnAddSupport").onclick = async () => {
+  if (!requireToken()) return;
+  const monthKey = document.getElementById("supportMonth").value.trim();
+  const employeeId = document.getElementById("supportEmployee").value;
+  const date = document.getElementById("supportDate").value;
+  const supportShift = document.getElementById("supportShift").value;
+  if (!monthKey || !employeeId || !date || !supportShift) return toast("請完整填寫支援登記欄位", "error");
+  if (!date.startsWith(monthKey)) return toast("支援日期需在所選月份內", "error");
+
+  const schedule = (await readJSON(`data/schedule-${monthKey}.json`).catch(() => null)) || { month: monthKey, status: "draft", days: {}, specialLeave: [] };
+  schedule.support = schedule.support || [];
+  schedule.support.push({ id: generateRequestId(), employeeId, date, supportShift, createdAt: new Date().toISOString() });
+  try {
+    await writeJSONWithRetry(`data/schedule-${monthKey}.json`, schedule, `新增支援排班登記 ${date}`, token);
+    toast("已新增支援登記", "success");
+    loadSupportList();
+  } catch (err) {
+    toast("寫入失敗：" + err.message, "error");
+  }
+};
+
+async function removeSupport(monthKey, recordId) {
+  if (!requireToken()) return;
+  const schedule = await readJSON(`data/schedule-${monthKey}.json`).catch(() => null);
+  if (!schedule || !schedule.support) return;
+  schedule.support = schedule.support.filter((r) => r.id !== recordId);
+  try {
+    await writeJSONWithRetry(`data/schedule-${monthKey}.json`, schedule, `刪除支援排班登記`, token);
+    toast("已刪除", "success");
+    loadSupportList();
+  } catch (err) {
+    toast("寫入失敗：" + err.message, "error");
+  }
+}
 
 document.getElementById("versionFooter").textContent = APP_VERSION;
 </script>

@@ -104,6 +104,10 @@
     <label>代號（選填，未填則用「名」的最後一字）</label><input type="text" id="setAlias" placeholder="例如：君" />
     <label>班別</label>
     <select id="setShift"></select>
+    <label style="display:flex; align-items:center; gap:8px; margin-top:10px;">
+      <input type="checkbox" id="setNoSchedule" style="width:auto;" />
+      <span style="color:var(--text); font-size:14px;">此帳號僅用於管理，不需排班／排休（例如多位主管中不實際輪班的人）</span>
+    </label>
     <label>到職日</label><input type="date" id="setHireDate" />
     <label>設定 4 位數密碼（之後登入用）</label>
     <input type="password" id="setPassword" inputmode="numeric" maxlength="4" placeholder="••••" />
@@ -132,7 +136,7 @@
       <div class="btn-row"><button class="btn btn-secondary" id="btnLogout">登出</button></div>
     </div>
 
-    <div class="card">
+    <div class="card" id="offDaysCard">
       <h2>排定下月休假（需選滿 <span id="reqDaysNum"></span> 天）</h2>
       <div id="offDaysEditArea">
         <div class="hint">點選日期切換選取，藍色框代表其他人已排休/請特休。選好後產生連結傳給主管確認上線。</div>
@@ -151,7 +155,7 @@
       </div>
     </div>
 
-    <div class="card">
+    <div class="card" id="leaveCard">
       <h2>申請特休</h2>
       <div id="leaveBalanceInfo" class="hint" style="margin-bottom:10px;"></div>
       <div id="pendingLeaveList" class="row-list" style="margin-bottom:10px;"></div>
@@ -160,6 +164,10 @@
       <div class="btn-row">
         <button class="btn btn-primary" id="btnApplyAnnual">產生連結並傳LINE給主管</button>
       </div>
+    </div>
+
+    <div class="card" id="noScheduleCard" style="display:none;">
+      <div class="hint">此帳號設定為「不需排班／排休」，僅用於系統管理，不會出現在排休協調與人力配置警示中。</div>
     </div>
   </div>
 
@@ -187,7 +195,8 @@ function showScreen(id) {
 
 function initShiftOptions() {
   const sel = document.getElementById("setShift");
-  sel.innerHTML = SHIFTS.map((s) => `<option value="${s.code}">${s.code} ${s.name}（${s.start}-${s.end}）</option>`).join("");
+  sel.innerHTML = SHIFTS.map((s) => `<option value="${s.code}">${s.code} ${s.name}（${s.start}-${s.end}）</option>`).join("")
+    + `<option value="NONE">無班別</option>`;
 }
 initShiftOptions();
 document.getElementById("reqDaysNum").textContent = MONTHLY_OFF_DAYS_REQUIRED;
@@ -343,6 +352,16 @@ function enterSetupOrPendingScreen() {
   }
 }
 
+document.getElementById("setNoSchedule").onchange = (e) => {
+  const sel = document.getElementById("setShift");
+  if (e.target.checked) {
+    sel.value = "NONE";
+    sel.disabled = true;
+  } else {
+    sel.disabled = false;
+  }
+};
+
 document.getElementById("btnSubmitSetup").onclick = async () => {
   const lastName = document.getElementById("setLastName").value.trim();
   const firstName = document.getElementById("setFirstName").value.trim();
@@ -351,6 +370,7 @@ document.getElementById("btnSubmitSetup").onclick = async () => {
   const hireDate = document.getElementById("setHireDate").value;
   const pw1 = document.getElementById("setPassword").value.trim();
   const pw2 = document.getElementById("setPassword2").value.trim();
+  const noSchedule = document.getElementById("setNoSchedule").checked;
 
   if (!lastName || !firstName || !hireDate) return toast("姓、名、到職日為必填", "error");
   if (!/^\d{4}$/.test(pw1)) return toast("密碼需為4位數字", "error");
@@ -362,7 +382,7 @@ document.getElementById("btnSubmitSetup").onclick = async () => {
     type: "register",
     employeeId: currentEmployee.id,
     phone: currentEmployee.phone,
-    lastName, firstName, alias, shift, hireDate, passwordHash,
+    lastName, firstName, alias, shift, hireDate, passwordHash, noSchedule,
     isBypassAdmin: currentEmployee.phone === ADMIN_BYPASS_PHONE,
   };
   savePending(currentEmployee.id, "register", payload);
@@ -376,7 +396,7 @@ function renderPendingRegister(payload, submittedAt) {
     <div class="row-item" style="opacity:0.6;">
       <div>
         <strong>${payload.lastName}${payload.firstName}（${payload.alias}）</strong>
-        <div class="meta">班別：${getShiftByCode(payload.shift)?.name || payload.shift}｜到職日：${payload.hireDate}｜送出時間：${submittedAt}</div>
+        <div class="meta">班別：${getShiftLabel(payload.shift)}｜到職日：${payload.hireDate}｜送出時間：${submittedAt}</div>
       </div>
       <span class="status-pill status-pending">待主管確認</span>
     </div>`;
@@ -408,12 +428,22 @@ async function showMainPanel() {
   clearPending(currentEmployee.id, "register");
 
   scheduleCache = await readJSON(`data/schedule-${targetMonthKey}.json`).catch(() => null);
-  const activeEmployees = employeesCache.filter((e) => e.status === "active" || e.id === currentEmployee.id);
+  // 「免排班/排休」的人不參與排休協調顯示
+  const activeEmployees = employeesCache.filter((e) => (e.status === "active" && !e.noSchedule) || e.id === currentEmployee.id);
 
-  const shift = getShiftByCode(currentEmployee.shift);
   const roleTag = currentEmployee.isManager || currentEmployee.phone === ADMIN_BYPASS_PHONE ? "｜<strong style='color:var(--dawn)'>主管權限</strong>" : "";
   document.getElementById("myInfo").innerHTML =
-    `${currentEmployee.lastName || ""}${currentEmployee.firstName || ""}（代號：${currentEmployee.alias || "-"}）｜班別：${shift ? shift.name : currentEmployee.shift}｜到職日：${currentEmployee.hireDate || "-"}${roleTag}`;
+    `${currentEmployee.lastName || ""}${currentEmployee.firstName || ""}（代號：${currentEmployee.alias || "-"}）｜班別：${getShiftLabel(currentEmployee.shift)}｜到職日：${currentEmployee.hireDate || "-"}${roleTag}`;
+
+  if (currentEmployee.noSchedule) {
+    document.getElementById("offDaysCard").style.display = "none";
+    document.getElementById("leaveCard").style.display = "none";
+    document.getElementById("noScheduleCard").style.display = "block";
+    return;
+  }
+  document.getElementById("offDaysCard").style.display = "block";
+  document.getElementById("leaveCard").style.display = "block";
+  document.getElementById("noScheduleCard").style.display = "none";
 
   const policy = configCache?.leavePolicy || DEFAULT_LEAVE_POLICY;
   const quota = calcAnnualLeaveQuota(currentEmployee.hireDate, policy);
