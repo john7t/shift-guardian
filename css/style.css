@@ -1,16 +1,16 @@
 @import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600&display=swap");
 
 :root {
-  --ink: #12141a;
-  --surface: #1b1e27;
-  --surface-2: #242833;
-  --line: #333949;
-  --text: #eef0f5;
-  --text-dim: #8b91a3;
-  --dawn: #e2a33d;   /* 日間班別 */
-  --dusk: #5f7fe0;   /* 夜間班別 */
-  --danger: #e2665f;
-  --success: #4fae82;
+  --ink: #f4f5f8;
+  --surface: #ffffff;
+  --surface-2: #eef0f5;
+  --line: #dde1e9;
+  --text: #1c1f27;
+  --text-dim: #6b7280;
+  --dawn: #c8790a;   /* 日間班別 */
+  --dusk: #4a5fc7;   /* 夜間班別 */
+  --danger: #c8433a;
+  --success: #2f9e64;
   --radius: 10px;
   --font-display: "Space Grotesk", sans-serif;
   --font-body: "Inter", "PingFang TC", "Microsoft JhengHei", sans-serif;
@@ -151,9 +151,9 @@ input:focus, select:focus {
   transition: transform 0.1s ease, opacity 0.15s ease;
 }
 .btn:active { transform: scale(0.97); }
-.btn-primary { background: var(--dawn); color: #1a1204; }
+.btn-primary { background: var(--dawn); color: #fff; }
 .btn-secondary { background: var(--surface-2); color: var(--text); border: 1px solid var(--line); }
-.btn-danger { background: var(--danger); color: #2b0906; }
+.btn-danger { background: var(--danger); color: #fff; }
 .btn-line { background: #06c755; color: #fff; }
 .btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .btn-block { width: 100%; }
@@ -195,14 +195,32 @@ table.cal td.emp-name {
   font-family: var(--font-mono);
   padding: 2px 4px;
 }
-.badge.shift-A1, .badge.shift-A2, .badge.shift-B { background: rgba(226,163,61,0.18); color: var(--dawn); }
-.badge.shift-C1, .badge.shift-C2, .badge.shift-D { background: rgba(95,127,224,0.18); color: var(--dusk); }
-.badge.off { background: rgba(226,102,95,0.18); color: var(--danger); }
-.badge.annual { background: rgba(79,174,130,0.2); color: var(--success); }
-.badge.pending { background: rgba(139,145,163,0.2); color: var(--text-dim); }
+.badge.shift-A1, .badge.shift-A2, .badge.shift-B { background: rgba(200,121,10,0.14); color: var(--dawn); }
+.badge.shift-C1, .badge.shift-C2, .badge.shift-D { background: rgba(74,95,199,0.14); color: var(--dusk); }
+.badge.off { background: rgba(200,67,58,0.14); color: var(--danger); }
+.badge.annual { background: rgba(47,158,100,0.16); color: var(--success); }
+.badge.pending { background: rgba(107,114,128,0.16); color: var(--text-dim); }
 
 .legend { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 10px; font-size: 12px; color: var(--text-dim); }
 .legend .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 4px; vertical-align: -1px; }
+
+/* ---------- 前後月灰字補位、短缺日高亮 ---------- */
+.cell-outmonth {
+  color: var(--text-dim);
+  opacity: 0.45;
+  background: var(--surface-2);
+}
+.date-outmonth { color: var(--text-dim); opacity: 0.55; }
+.col-shortage { background: rgba(200,67,58,0.10); }
+.date-blink {
+  color: var(--danger);
+  font-weight: 700;
+  animation: blinkRed 1s step-start infinite;
+}
+@keyframes blinkRed {
+  50% { opacity: 0.25; }
+}
+.badge.support { background: rgba(74,95,199,0.16); color: var(--dusk); }
 
 /* ---------- Day picker grid ---------- */
 .day-grid {
@@ -238,10 +256,10 @@ table.cal td.emp-name {
 }
 .row-item .meta { font-size: 12px; color: var(--text-dim); }
 .status-pill { font-size: 11px; padding: 3px 9px; border-radius: 999px; font-family: var(--font-mono); }
-.status-pending { background: rgba(139,145,163,0.2); color: var(--text-dim); }
-.status-approved { background: rgba(79,174,130,0.2); color: var(--success); }
-.status-rejected { background: rgba(226,102,95,0.2); color: var(--danger); }
-.status-locked { background: rgba(226,163,61,0.2); color: var(--dawn); }
+.status-pending { background: rgba(107,114,128,0.16); color: var(--text-dim); }
+.status-approved { background: rgba(47,158,100,0.16); color: var(--success); }
+.status-rejected { background: rgba(200,67,58,0.16); color: var(--danger); }
+.status-locked { background: rgba(200,121,10,0.16); color: var(--dawn); }
 
 /* ---------- toast ---------- */
 #sg-toast {
