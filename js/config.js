@@ -1,9 +1,28 @@
 // ============================================
 // 全域設定
 // ============================================
-const GITHUB_OWNER = "john7t"; // TODO: 改成你的 GitHub 帳號
-const REPO_NAME = "shift-guardian";          // repo 名稱
 const REPO_BRANCH = "main";
+const LS_KEY_GITHUB_OVERRIDE = "sg_github_override"; // { owner, repo }，僅在該裝置有設定覆寫時使用
+
+// 從目前網址自動判斷 GitHub 帳號與 repo 名稱（網站本來就架在 https://帳號.github.io/repo名稱/ 上）
+// 若該裝置的主管頁另外設定了覆寫值，優先採用覆寫值
+function resolveGithubOwnerRepo() {
+  try {
+    const override = JSON.parse(localStorage.getItem(LS_KEY_GITHUB_OVERRIDE) || "null");
+    if (override && override.owner && override.repo) return override;
+  } catch (e) {}
+
+  const host = location.hostname; // 例如 john7t.github.io
+  const pathParts = location.pathname.split("/").filter(Boolean); // 例如 ["shift-guardian", "admin.html"]
+
+  if (host.endsWith(".github.io") && pathParts.length > 0) {
+    return { owner: host.replace(".github.io", ""), repo: pathParts[0] };
+  }
+  // 無法自動判斷時的保底值（例如本機直接開檔測試時）
+  return { owner: "YOUR_GITHUB_USERNAME", repo: "shift-guardian" };
+}
+
+const { owner: GITHUB_OWNER, repo: REPO_NAME } = resolveGithubOwnerRepo();
 
 const GITHUB_API_BASE = `https://api.github.com/repos/${GITHUB_OWNER}/${REPO_NAME}/contents`;
 const GITHUB_RAW_BASE = `https://raw.githubusercontent.com/${GITHUB_OWNER}/${REPO_NAME}/${REPO_BRANCH}`;
@@ -48,7 +67,7 @@ const IDLE_TIMEOUT_MS = 5 * 60 * 1000; // 5 分鐘
 const MIN_STAFF_WARNING_THRESHOLD = 3;
 
 // 系統版本（每次更新請同步修改，並在頁面底部顯示，方便確認目前載入的是哪個版本）
-const APP_VERSION = "1.0-006";
+const APP_VERSION = "1.0-007";
 
 // localStorage / sessionStorage keys
 const LS_KEY_EMPLOYEE_SESSION = "sg_employee_session"; // { employeeId, phone }
