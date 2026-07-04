@@ -106,9 +106,39 @@ function getAllPending(employeeId) {
   }
 }
 
+function isKioskMode() {
+  return localStorage.getItem(LS_KEY_KIOSK_MODE) === "1";
+}
+
 function clearPending(employeeId, key) {
   const store = getAllPending(employeeId);
   delete store[key];
   localStorage.setItem(LS_KEY_PENDING_PREFIX + employeeId, JSON.stringify(store));
+}
+
+// 掃描本機（這台裝置）目前所有員工累積的待審資料，回傳攤平的清單
+// 用於「公用機」情境：多人在同一台裝置輪流操作，主管最後在同一台機器上統一審核
+function scanAllLocalPending() {
+  const results = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (!key || !key.startsWith(LS_KEY_PENDING_PREFIX)) continue;
+    const employeeId = key.slice(LS_KEY_PENDING_PREFIX.length);
+    let store;
+    try {
+      store = JSON.parse(localStorage.getItem(key) || "{}");
+    } catch (e) {
+      continue;
+    }
+    Object.keys(store).forEach((itemKey) => {
+      results.push({
+        employeeId,
+        itemKey,
+        payload: store[itemKey].payload,
+        submittedAt: store[itemKey].submittedAt,
+      });
+    });
+  }
+  return results;
 }
 

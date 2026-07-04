@@ -41,6 +41,14 @@ function getShiftByCode(code) {
   return SHIFTS.find((s) => s.code === code) || null;
 }
 
+// 取得「協調同組」的班別代碼清單（例如 A1/A2 一組，C2/D 一組，其餘自己一組）
+function getGroupShiftCodes(shiftCode) {
+  const s = getShiftByCode(shiftCode);
+  if (!s) return [shiftCode];
+  if (s.pairWith) return [s.code, s.pairWith];
+  return [s.code];
+}
+
 // 取得班別顯示用名稱，處理「無班別」(NONE) 這個特殊值
 function getShiftLabel(code) {
   if (!code || code === "NONE") return "無班別";
@@ -67,10 +75,11 @@ const IDLE_TIMEOUT_MS = 5 * 60 * 1000; // 5 分鐘
 const MIN_STAFF_WARNING_THRESHOLD = 3;
 
 // 系統版本（每次更新請同步修改，並在頁面底部顯示，方便確認目前載入的是哪個版本）
-const APP_VERSION = "1.0-007";
+const APP_VERSION = "1.0-010";
 
 // localStorage / sessionStorage keys
 const LS_KEY_EMPLOYEE_SESSION = "sg_employee_session"; // { employeeId, phone }
 const LS_KEY_EMPLOYEE_UNLOCKED_AT = "sg_employee_unlocked_at"; // 最後一次通過密碼驗證的時間戳
 const LS_KEY_ADMIN_TOKEN = "sg_admin_token_v2"; // 存在本機，每位主管各自在自己裝置輸入
 const LS_KEY_PENDING_PREFIX = "sg_pending_"; // + employeeId，暫存尚未經主管核准的送出內容
+const LS_KEY_KIOSK_MODE = "sg_kiosk_mode"; // "1" 表示這台裝置設為公務機模式
