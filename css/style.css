@@ -123,6 +123,8 @@ a { color: inherit; }
 label { display: block; font-size: 13px; color: var(--text-dim); margin: 12px 0 6px; }
 input[type=text], input[type=tel], input[type=date], input[type=password], select {
   width: 100%;
+  min-width: 100%;
+  box-sizing: border-box;
   background: var(--surface-2);
   border: 1px solid var(--line);
   color: var(--text);
@@ -130,6 +132,11 @@ input[type=text], input[type=tel], input[type=date], input[type=password], selec
   padding: 10px 12px;
   font-size: 14px;
   font-family: var(--font-body);
+}
+input[type=date] {
+  display: block;
+  -webkit-appearance: none;
+  appearance: none;
 }
 input:focus, select:focus {
   outline: none;
@@ -158,6 +165,7 @@ input:focus, select:focus {
 .btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .btn-block { width: 100%; }
 .btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+.view-scope-btn.active { background: var(--dawn); color: #fff; border-color: var(--dawn); }
 
 /* ---------- Calendar ---------- */
 .cal-scroll { overflow-x: auto; }
