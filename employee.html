@@ -18,6 +18,10 @@
     </div>
   </div>
 
+  <div class="hint" id="kioskBanner" style="display:none; background: rgba(200,121,10,0.1); border: 1px solid var(--dawn); border-radius: 8px; padding: 8px 12px; margin-bottom: 12px;">
+    📋 此裝置為公務機模式：資料只會儲存在本機，由主管統一審核，不需要傳LINE。
+  </div>
+
   <!-- 1. 手機輸入 -->
   <div class="card" id="screenPhone">
     <h2>員工登入</h2>
@@ -89,9 +93,10 @@
       <label>設定新的 4 位數密碼</label>
       <input type="password" id="forgotNewPw" inputmode="numeric" maxlength="4" placeholder="••••" />
       <div class="btn-row">
-        <button class="btn btn-primary" id="btnForgotSubmit">送出，傳LINE給主管確認</button>
+        <button class="btn btn-primary" id="btnForgotSubmit">儲存重設申請</button>
+        <button class="btn btn-secondary" id="btnForgotLine" style="display:none;">改用LINE通知主管</button>
       </div>
-      <p class="hint">傳送後需經主管確認「確實是本人」才會生效，請耐心等候。</p>
+      <p class="hint">若在公司公務機上，可請主管直接在後台審核；不在店內請按上方「改用LINE通知主管」，需經主管確認「確實是本人」才會生效。</p>
     </div>
     <div id="forgotPendingNote" class="hint" style="display:none; margin-top:10px;"></div>
   </div>
@@ -114,7 +119,7 @@
     <label>再輸入一次密碼</label>
     <input type="password" id="setPassword2" inputmode="numeric" maxlength="4" placeholder="••••" />
     <div class="btn-row">
-      <button class="btn btn-primary" id="btnSubmitSetup">送出</button>
+      <button class="btn btn-primary" id="btnSubmitSetup">儲存（待主管於此裝置或用LINE審核）</button>
     </div>
   </div>
 
@@ -139,11 +144,16 @@
     <div class="card" id="offDaysCard">
       <h2>排定下月休假（需選滿 <span id="reqDaysNum"></span> 天）</h2>
       <div id="offDaysEditArea">
-        <div class="hint">點選日期切換選取，藍色框代表其他人已排休/請特休。選好後產生連結傳給主管確認上線。</div>
+        <div class="hint">點選日期切換選取，藍色框代表其他人已排休/請特休（含同一台裝置上其他人尚未送出的暫存選擇）。選好後產生連結傳給主管確認上線。</div>
+        <div class="btn-row" style="margin-top:8px;">
+          <button class="btn btn-secondary view-scope-btn" data-scope="self">只顯示自己</button>
+          <button class="btn btn-secondary view-scope-btn" data-scope="group">顯示同組</button>
+          <button class="btn btn-secondary view-scope-btn" data-scope="all">顯示所有人</button>
+        </div>
         <div class="day-grid" id="offDayGrid" style="margin-top:12px;"></div>
         <div class="hint" style="margin-top:8px;">已選 <strong id="selectedCount">0</strong> / <span id="reqDaysNum2"></span> 天</div>
         <div class="btn-row">
-          <button class="btn btn-primary" id="btnSendOffDays">產生連結並傳LINE給主管</button>
+          <button class="btn btn-primary" id="btnSendOffDays">儲存排休（待主管於此裝置或用LINE審核）</button>
         </div>
       </div>
       <div id="offDaysPendingArea" style="display:none;">
@@ -162,7 +172,7 @@
       <label>選擇日期</label>
       <input type="date" id="annualLeaveDate" />
       <div class="btn-row">
-        <button class="btn btn-primary" id="btnApplyAnnual">產生連結並傳LINE給主管</button>
+        <button class="btn btn-primary" id="btnApplyAnnual">儲存申請（待主管於此裝置或用LINE審核）</button>
       </div>
     </div>
 
@@ -207,6 +217,10 @@ async function loadBrand() {
   document.getElementById("brandName").textContent = (config && config.storeName) ? config.storeName : "Shift Guardian";
 }
 loadBrand();
+
+if (isKioskMode()) {
+  document.getElementById("kioskBanner").style.display = "block";
+}
 
 // ---------- QRCode ----------
 document.getElementById("btnGenQr").onclick = () => {
@@ -310,6 +324,7 @@ function resetForgotForm() {
   document.getElementById("forgotStep2").style.display = "none";
   document.getElementById("forgotPendingNote").style.display = "none";
   document.getElementById("forgotPhone").value = "";
+  document.getElementById("btnForgotLine").style.display = "none";
 }
 
 document.getElementById("btnForgotCheck").onclick = async () => {
@@ -335,9 +350,13 @@ document.getElementById("btnForgotSubmit").onclick = () => {
   hashText(newPw).then((hash) => {
     const payload = { type: "reset_password", employeeId: forgotEmp.id, phone: forgotEmp.phone, newPasswordHash: hash };
     localStorage.setItem("sg_forgot_pending_" + forgotEmp.phone, JSON.stringify({ submittedAt: new Date().toLocaleString() }));
+    savePending(forgotEmp.id, "reset_password", payload);
     const name = forgotEmp.alias || forgotEmp.firstName;
-    sendToManager(payload, `${name}（${forgotEmp.phone}）申請重設密碼，請主管確認本人身份後核准。`);
-    toast("已送出重設申請，請等主管確認", "success");
+    document.getElementById("btnForgotLine").style.display = isKioskMode() ? "none" : "inline-flex";
+    document.getElementById("btnForgotLine").onclick = () => {
+      sendToManager(payload, `${name}（${forgotEmp.phone}）申請重設密碼，請主管確認本人身份後核准。`);
+    };
+    toast("已儲存，若在公司公務機上可請主管直接在後台審核；不在店內可按「改用LINE通知主管」", "success");
   });
 };
 
@@ -388,7 +407,7 @@ document.getElementById("btnSubmitSetup").onclick = async () => {
   savePending(currentEmployee.id, "register", payload);
   renderPendingRegister(payload, new Date().toLocaleString());
   showScreen("screenPendingRegister");
-  sendToManager(payload, `${lastName}${firstName}（${alias}）完成首次登入設定，班別：${shift}，到職日：${hireDate}，請主管確認寫入系統。`);
+  toast("已儲存，若在公司公務機上可請主管直接在後台審核；不在店內則可用下方按鈕改傳LINE", "success");
 };
 
 function renderPendingRegister(payload, submittedAt) {
@@ -401,6 +420,7 @@ function renderPendingRegister(payload, submittedAt) {
       <span class="status-pill status-pending">待主管確認</span>
     </div>`;
   document.getElementById("btnDirectAdminFromRegister").style.display = payload.isBypassAdmin ? "inline-flex" : "none";
+  document.getElementById("btnResendRegister").style.display = isKioskMode() ? "none" : "inline-flex";
 }
 
 document.getElementById("btnResendRegister").onclick = () => {
@@ -474,7 +494,9 @@ function renderOffDaysSection(activeEmployees) {
       document.getElementById("offDaysEditArea").style.display = "none";
       document.getElementById("offDaysPendingArea").style.display = "block";
       renderGrid("offDayGridPending", pendingDates, true);
-      document.getElementById("btnResendOffDays").onclick = () => {
+      const resendBtn = document.getElementById("btnResendOffDays");
+      resendBtn.style.display = isKioskMode() ? "none" : "inline-flex";
+      resendBtn.onclick = () => {
         sendToManager(pending[pendingKey].payload, `${currentEmployee.alias} 的 ${targetMonthKey} 排休尚待確認（${pendingDates.join(", ")}）。`);
       };
       return;
@@ -484,6 +506,30 @@ function renderOffDaysSection(activeEmployees) {
   document.getElementById("offDaysEditArea").style.display = "block";
   document.getElementById("offDaysPendingArea").style.display = "none";
   renderOffDayGrid(activeEmployees);
+}
+
+let viewScope = "group"; // "self" | "group" | "all"
+let lastActiveEmployees = [];
+
+document.querySelectorAll(".view-scope-btn").forEach((btn) => {
+  btn.onclick = () => {
+    viewScope = btn.dataset.scope;
+    document.querySelectorAll(".view-scope-btn").forEach((b) => b.classList.toggle("active", b === btn));
+    renderOffDayGrid(lastActiveEmployees);
+  };
+});
+
+// 取得同一台裝置上「其他員工」尚未送出給主管、但已經選好的排休暫存（公用機情境：協調時就看得到）
+function getOtherLocalPendingOffDays(excludeEmployeeId, month) {
+  const all = scanAllLocalPending();
+  const map = {}; // employeeId -> dates[]
+  all.forEach((item) => {
+    if (item.employeeId === excludeEmployeeId) return;
+    if (item.payload?.type !== "off_days") return;
+    if (item.payload.month !== month) return;
+    map[item.employeeId] = item.payload.dates;
+  });
+  return map;
 }
 
 function renderGrid(elId, markedDates, disabled) {
@@ -500,9 +546,25 @@ function renderGrid(elId, markedDates, disabled) {
 }
 
 function renderOffDayGrid(activeEmployees) {
+  lastActiveEmployees = activeEmployees;
+  document.querySelectorAll(".view-scope-btn").forEach((b) => b.classList.toggle("active", b.dataset.scope === viewScope));
+
   const nDays = daysInMonth(targetMonthKey);
   const existingOwn = (scheduleCache?.days?.[currentEmployee.id]) || [];
   selectedDays = new Set(existingOwn);
+
+  // 依顯示範圍決定要比對哪些同事
+  const groupCodes = getGroupShiftCodes(currentEmployee.shift);
+  let comparisonEmployees = [];
+  if (viewScope === "self") {
+    comparisonEmployees = [];
+  } else if (viewScope === "group") {
+    comparisonEmployees = activeEmployees.filter((e) => e.id !== currentEmployee.id && groupCodes.includes(e.shift));
+  } else {
+    comparisonEmployees = activeEmployees.filter((e) => e.id !== currentEmployee.id);
+  }
+
+  const otherLocalPending = getOtherLocalPendingOffDays(currentEmployee.id, targetMonthKey);
 
   const grid = document.getElementById("offDayGrid");
   grid.innerHTML = "";
@@ -512,11 +574,11 @@ function renderOffDayGrid(activeEmployees) {
     cell.className = "day-cell";
     cell.textContent = d;
 
-    const takenByOthers = activeEmployees.some((e) => {
-      if (e.id === currentEmployee.id) return false;
+    const takenByOthers = comparisonEmployees.some((e) => {
       const off = (scheduleCache?.days?.[e.id]) || [];
       const leave = (scheduleCache?.specialLeave || []).some((r) => r.employeeId === e.id && r.date === dateStr && r.status !== "rejected");
-      return off.includes(dateStr) || leave;
+      const localPending = (otherLocalPending[e.id] || []).includes(dateStr);
+      return off.includes(dateStr) || leave || localPending;
     });
     if (takenByOthers) cell.classList.add("taken-by-others");
     if (selectedDays.has(dateStr)) cell.classList.add("selected");
@@ -550,8 +612,7 @@ document.getElementById("btnSendOffDays").onclick = () => {
     dates: Array.from(selectedDays).sort(),
   };
   savePending(currentEmployee.id, "off_days_" + targetMonthKey, payload);
-  const name = currentEmployee.alias || currentEmployee.firstName;
-  sendToManager(payload, `${name} 更新了 ${targetMonthKey} 的排休（${payload.dates.join(", ")}），請主管確認上線。`);
+  toast("已儲存，若在公司公務機上可請主管直接在後台審核；不在店內則可用下方按鈕改傳LINE", "success");
   document.getElementById("offDaysEditArea").style.display = "none";
   document.getElementById("offDaysPendingArea").style.display = "block";
   renderGrid("offDayGridPending", payload.dates, true);
@@ -575,9 +636,13 @@ function renderLeaveSection() {
   } else {
     listEl.innerHTML = stillPending.map((k) => {
       const p = getAllPending(currentEmployee.id)[k].payload;
-      return `<div class="row-item" style="opacity:0.6;">
+      const lineBtn = isKioskMode() ? "" : `<button class="btn btn-secondary" style="padding:6px 10px; font-size:12px;" onclick='sendToManager(${JSON.stringify(p)}, "${currentEmployee.alias || currentEmployee.firstName} 申請 ${p.date} 特休，請主管審核。")'>傳LINE</button>`;
+      return `<div class="row-item" style="opacity:0.8;">
         <div>特休申請：${p.date}</div>
-        <span class="status-pill status-pending">待主管確認</span>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span class="status-pill status-pending">待主管確認</span>
+          ${lineBtn}
+        </div>
       </div>`;
     }).join("");
   }
@@ -589,8 +654,7 @@ document.getElementById("btnApplyAnnual").onclick = () => {
   const requestId = generateRequestId();
   const payload = { type: "leave_request", employeeId: currentEmployee.id, date, requestId };
   savePending(currentEmployee.id, "leave_" + requestId, payload);
-  const name = currentEmployee.alias || currentEmployee.firstName;
-  sendToManager(payload, `${name} 申請 ${date} 特休，請主管審核。`);
+  toast("已儲存，若在公司公務機上可請主管直接在後台審核；不在店內則可在下方清單用「傳LINE」通知", "success");
   renderLeaveSection();
 };
 

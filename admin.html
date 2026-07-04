@@ -27,6 +27,29 @@
 
   <div id="adminPanel" style="display:none;">
 
+    <!-- 公務機模式切換 -->
+    <div class="card">
+      <h2>公務機模式</h2>
+      <p class="hint">開啟後，這台裝置（不管是員工登入頁還是主管後台）都會**只用本機儲存**來運作：員工送出資料不會強迫跳LINE，主管在「本機待審清單」直接統一審核。適合固定放在店裡、大家輪流用的公務手機/iPad。你自己的手機建議保持關閉。</p>
+      <div class="btn-row" style="margin-top:0;">
+        <button class="btn btn-primary" id="btnToggleKiosk">開啟公務機模式</button>
+      </div>
+      <p id="kioskStatus" class="hint" style="margin-top:10px;"></p>
+    </div>
+
+    <!-- 唯讀模式提示 -->
+    <div class="card" id="readOnlyBanner" style="display:none; border-color: var(--dawn);">
+      <h2 style="color:var(--dawn);">目前是檢視模式（唯讀）</h2>
+      <p class="hint">這台裝置沒有設定 GitHub Token，可以查看所有資料，但無法核准申請、開通員工或做任何寫入操作。若要正式寫入，請在有設定 Token 的那台裝置（例如公司公務機）上操作。</p>
+    </div>
+
+    <!-- 本機待審清單（公用機情境：多人在同一台裝置累積的待審資料） -->
+    <div class="card">
+      <h2>本機待審清單</h2>
+      <p class="hint">列出這台裝置上，所有人累積但尚未經主管處理的申請，適合公用機情境：多人輪流用同一台裝置排休，最後由主管在這台機器上統一審核上線。</p>
+      <div id="localPendingList" class="row-list"></div>
+    </div>
+
     <!-- 待處理的申請連結 -->
     <div class="card" id="applyCard" style="display:none;">
       <h2>待審核申請</h2>
@@ -267,6 +290,8 @@ document.getElementById("btnSaveToken").onclick = async () => {
   localStorage.setItem(LS_KEY_ADMIN_TOKEN, t);
   document.getElementById("tokenStatus").textContent = "驗證成功，已儲存在本機。";
   toast("Token 已儲存", "success");
+  updateReadOnlyUI();
+  updateKioskUI();
 };
 
 document.getElementById("btnClearToken").onclick = () => {
@@ -274,19 +299,83 @@ document.getElementById("btnClearToken").onclick = () => {
   token = null;
   document.getElementById("tokenInput").value = "";
   document.getElementById("tokenStatus").textContent = "已清除本機 Token。";
+  updateReadOnlyUI();
+  updateKioskUI();
+};
+
+function updateKioskUI() {
+  const on = isKioskMode();
+  document.getElementById("btnToggleKiosk").textContent = on ? "關閉公務機模式" : "開啟公務機模式";
+  if (on && !token) {
+    document.getElementById("kioskStatus").innerHTML =
+      `<span style="color:var(--danger);">⚠ 公務機模式已開啟，但目前沒有可用的 Token，主管將無法在本機審核寫入，請盡快重新設定 Token。</span>`;
+  } else {
+    document.getElementById("kioskStatus").textContent = on
+      ? "此裝置目前為「公務機模式」：員工登入頁送出資料只會存本機，不會強迫跳LINE。"
+      : "此裝置目前為一般模式：員工登入頁送出資料後，仍會提供LINE通知主管的選項。";
+  }
+}
+
+document.getElementById("btnToggleKiosk").onclick = async () => {
+  const on = isKioskMode();
+  if (on) {
+    localStorage.removeItem(LS_KEY_KIOSK_MODE);
+    updateKioskUI();
+    toast("已關閉公務機模式", "success");
+    return;
+  }
+
+  // 開啟前先確認這台裝置的 Token 真的可用，避免公務機累積一堆待審資料卻無法寫入
+  const btn = document.getElementById("btnToggleKiosk");
+  btn.disabled = true;
+  btn.textContent = "驗證 Token 中…";
+
+  if (!token) {
+    btn.disabled = false;
+    updateKioskUI();
+    toast("尚未設定 Token，請先在下方「我的 GitHub Token 設定」設定並驗證成功後，才能開啟公務機模式", "error");
+    return;
+  }
+  const result = await validateAdminToken(token);
+  btn.disabled = false;
+
+  if (!result.ok) {
+    updateKioskUI();
+    toast("Token 驗證失敗，無法開啟公務機模式：" + result.reason, "error");
+    return;
+  }
+
+  localStorage.setItem(LS_KEY_KIOSK_MODE, "1");
+  updateKioskUI();
+  toast("Token 可用，已開啟公務機模式", "success");
 };
 
 function requireToken() {
   if (!token) {
-    toast("請先在下方「我的 GitHub Token 設定」輸入並存檔", "error");
+    toast("請先在下方「我的 GitHub Token 設定」輸入並存檔（或改到有設定Token的公務機上操作）", "error");
     return false;
   }
   return true;
 }
 
+function updateReadOnlyUI() {
+  const banner = document.getElementById("readOnlyBanner");
+  const isReadOnly = !token;
+  banner.style.display = isReadOnly ? "block" : "none";
+  const writeButtonIds = [
+    "btnSaveStoreName", "btnCreateEmployee", "btnSaveManagers",
+    "btnLockMonth", "btnUnlockMonth", "btnSavePolicy", "btnAddSupport", "btnApprove",
+  ];
+  writeButtonIds.forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.disabled = isReadOnly;
+  });
+}
+
 // ---------- 開機 ----------
 async function boot() {
   restoreTokenUI();
+  updateKioskUI();
   await loadEmployees();
   await loadConfig();
   document.getElementById("brandName").textContent = configCache.storeName || "Shift Guardian";
@@ -294,6 +383,8 @@ async function boot() {
   checkIncomingApply();
   await loadMonthAdmin();
   initSupportSection();
+  renderLocalPendingList();
+  updateReadOnlyUI();
 }
 
 async function loadEmployees() {
@@ -505,6 +596,117 @@ document.getElementById("btnUnlockMonth").onclick = async () => {
   }
 };
 
+// ---------- 核心：套用單一筆申請資料（不管來源是URL連結還是本機待審清單） ----------
+async function applyPayload(payload) {
+  const p = payload;
+  if (p.type === "register") {
+    let emp = employeesCache.find((e) => e.id === p.employeeId);
+    const grantManager = p.isBypassAdmin;
+    if (!emp) {
+      emp = { id: p.employeeId, phone: p.phone, activationCode: "", createdAt: new Date().toISOString() };
+      employeesCache.push(emp);
+    }
+    Object.assign(emp, {
+      lastName: p.lastName, firstName: p.firstName, alias: p.alias,
+      shift: p.shift, hireDate: p.hireDate, passwordHash: p.passwordHash,
+      noSchedule: !!p.noSchedule,
+      status: "active",
+      isManager: emp.isManager || grantManager,
+    });
+    await writeJSONWithRetry("data/employees.json", employeesCache, `核准 ${p.phone} 首次登入設定`, token);
+  } else if (p.type === "off_days") {
+    const schedule = (await readJSON(`data/schedule-${p.month}.json`).catch(() => null)) || { month: p.month, status: "draft", days: {}, specialLeave: [] };
+    if (schedule.status === "locked") throw new Error("本月已鎖定，若要修改請先解除鎖定");
+    schedule.days = schedule.days || {};
+    schedule.days[p.employeeId] = p.dates;
+    await writeJSONWithRetry(`data/schedule-${p.month}.json`, schedule, `更新 ${findEmpName(p.employeeId)} 的 ${p.month} 排休`, token);
+  } else if (p.type === "leave_request") {
+    const month = p.date.slice(0, 7);
+    const schedule = (await readJSON(`data/schedule-${month}.json`).catch(() => null)) || { month, status: "draft", days: {}, specialLeave: [] };
+    schedule.specialLeave = schedule.specialLeave || [];
+    const existing = schedule.specialLeave.find((r) => r.id === p.requestId);
+    if (existing) {
+      existing.status = "approved";
+    } else {
+      schedule.specialLeave.push({
+        id: p.requestId, employeeId: p.employeeId, date: p.date,
+        type: "annual", status: "approved", requestedAt: new Date().toISOString(),
+        decidedAt: new Date().toISOString(),
+      });
+    }
+    await writeJSONWithRetry(`data/schedule-${month}.json`, schedule, `核准 ${findEmpName(p.employeeId)} 的特休申請 ${p.date}`, token);
+  } else if (p.type === "reset_password") {
+    const emp = employeesCache.find((e) => e.id === p.employeeId);
+    if (!emp) throw new Error("找不到對應員工");
+    emp.passwordHash = p.newPasswordHash;
+    await writeJSONWithRetry("data/employees.json", employeesCache, `核准 ${p.phone} 重設密碼`, token);
+  } else {
+    throw new Error("未知的申請類型");
+  }
+}
+
+function renderApplyPayloadPreview(p) {
+  if (p.type === "register") {
+    return `<strong>員工首次登入設定${p.isBypassAdmin ? "（管理員帳號）" : ""}</strong>
+      <div class="meta">手機：${p.phone}｜姓名：${p.lastName}${p.firstName}｜代號：${p.alias}｜班別：${getShiftLabel(p.shift)}｜到職日：${p.hireDate}</div>`;
+  } else if (p.type === "off_days") {
+    return `<strong>${findEmpName(p.employeeId)} 的排休更新</strong>
+      <div class="meta">月份：${p.month}｜日期：${p.dates.join(", ")}</div>`;
+  } else if (p.type === "leave_request") {
+    return `<strong>${findEmpName(p.employeeId)} 申請特休</strong>
+      <div class="meta">日期：${p.date}</div>`;
+  } else if (p.type === "reset_password") {
+    return `<strong>${findEmpName(p.employeeId)} 申請重設密碼</strong>
+      <div class="meta">手機：${p.phone}｜請務必確認這是本人操作再核准</div>`;
+  }
+  return `<div class="hint">未知的申請類型</div>`;
+}
+
+// ---------- 本機待審清單（公用機情境） ----------
+function renderLocalPendingList() {
+  const el = document.getElementById("localPendingList");
+  const items = scanAllLocalPending();
+  if (items.length === 0) {
+    el.innerHTML = `<div class="hint">這台裝置目前沒有累積待審資料</div>`;
+    return;
+  }
+  el.innerHTML = items.map((item, idx) => `
+    <div class="row-item">
+      <div>${renderApplyPayloadPreview(item.payload)}<div class="meta">送出時間：${item.submittedAt}</div></div>
+      <div style="display:flex; gap:8px;">
+        <button class="btn btn-primary" style="padding:6px 10px; font-size:12px;" onclick="approveLocalPending(${idx})">核准</button>
+        <button class="btn btn-danger" style="padding:6px 10px; font-size:12px;" onclick="rejectLocalPending(${idx})">駁回</button>
+      </div>
+    </div>`).join("");
+}
+
+async function approveLocalPending(idx) {
+  if (!requireToken()) return;
+  const items = scanAllLocalPending();
+  const item = items[idx];
+  if (!item) return;
+  try {
+    await applyPayload(item.payload);
+    clearPending(item.employeeId, item.itemKey);
+    toast("已核准並寫入系統", "success");
+    await loadEmployees();
+    await loadMonthAdmin();
+    renderLocalPendingList();
+  } catch (err) {
+    toast("寫入失敗：" + err.message, "error");
+  }
+}
+
+function rejectLocalPending(idx) {
+  const items = scanAllLocalPending();
+  const item = items[idx];
+  if (!item) return;
+  if (!confirm("確定要駁回這筆申請嗎？將從這台裝置清除，本人需要重新送出。")) return;
+  clearPending(item.employeeId, item.itemKey);
+  toast("已駁回", "info");
+  renderLocalPendingList();
+}
+
 // ---------- 處理員工傳來的申請連結 ----------
 let pendingPayload = null;
 
@@ -531,42 +733,7 @@ function renderApplyPreview() {
   const card = document.getElementById("applyCard");
   const box = document.getElementById("applyPreview");
   card.style.display = "block";
-
-  if (pendingPayload.type === "register") {
-    const p = pendingPayload;
-    box.innerHTML = `<div class="row-item">
-      <div>
-        <strong>員工首次登入設定${p.isBypassAdmin ? "（管理員帳號）" : ""}</strong>
-        <div class="meta">手機：${p.phone}｜姓名：${p.lastName}${p.firstName}｜代號：${p.alias}｜班別：${getShiftLabel(p.shift)}｜到職日：${p.hireDate}</div>
-      </div>
-    </div>`;
-  } else if (pendingPayload.type === "off_days") {
-    const p = pendingPayload;
-    box.innerHTML = `<div class="row-item">
-      <div>
-        <strong>${findEmpName(p.employeeId)} 的排休更新</strong>
-        <div class="meta">月份：${p.month}｜日期：${p.dates.join(", ")}</div>
-      </div>
-    </div>`;
-  } else if (pendingPayload.type === "leave_request") {
-    const p = pendingPayload;
-    box.innerHTML = `<div class="row-item">
-      <div>
-        <strong>${findEmpName(p.employeeId)} 申請特休</strong>
-        <div class="meta">日期：${p.date}</div>
-      </div>
-    </div>`;
-  } else if (pendingPayload.type === "reset_password") {
-    const p = pendingPayload;
-    box.innerHTML = `<div class="row-item">
-      <div>
-        <strong>${findEmpName(p.employeeId)} 申請重設密碼</strong>
-        <div class="meta">手機：${p.phone}｜請務必確認這是本人操作再核准</div>
-      </div>
-    </div>`;
-  } else {
-    box.innerHTML = `<div class="hint">未知的申請類型</div>`;
-  }
+  box.innerHTML = `<div class="row-item"><div>${renderApplyPayloadPreview(pendingPayload)}</div></div>`;
 }
 
 document.getElementById("btnReject").onclick = () => {
@@ -583,54 +750,7 @@ document.getElementById("btnApprove").onclick = async () => {
   if (!requireToken()) return;
 
   try {
-    if (pendingPayload.type === "register") {
-      const p = pendingPayload;
-      let emp = employeesCache.find((e) => e.id === p.employeeId);
-      const grantManager = p.isBypassAdmin;
-
-      if (!emp) {
-        // 管理員手機自助註冊、系統內尚無此筆紀錄 → 直接新增
-        emp = { id: p.employeeId, phone: p.phone, activationCode: "", createdAt: new Date().toISOString() };
-        employeesCache.push(emp);
-      }
-      Object.assign(emp, {
-        lastName: p.lastName, firstName: p.firstName, alias: p.alias,
-        shift: p.shift, hireDate: p.hireDate, passwordHash: p.passwordHash,
-        noSchedule: !!p.noSchedule,
-        status: "active",
-        isManager: emp.isManager || grantManager,
-      });
-      await writeJSONWithRetry("data/employees.json", employeesCache, `核准 ${p.phone} 首次登入設定`, token);
-    } else if (pendingPayload.type === "off_days") {
-      const p = pendingPayload;
-      const schedule = (await readJSON(`data/schedule-${p.month}.json`).catch(() => null)) || { month: p.month, status: "draft", days: {}, specialLeave: [] };
-      if (schedule.status === "locked") throw new Error("本月已鎖定，若要修改請先解除鎖定");
-      schedule.days = schedule.days || {};
-      schedule.days[p.employeeId] = p.dates;
-      await writeJSONWithRetry(`data/schedule-${p.month}.json`, schedule, `更新 ${findEmpName(p.employeeId)} 的 ${p.month} 排休`, token);
-    } else if (pendingPayload.type === "leave_request") {
-      const p = pendingPayload;
-      const month = p.date.slice(0, 7);
-      const schedule = (await readJSON(`data/schedule-${month}.json`).catch(() => null)) || { month, status: "draft", days: {}, specialLeave: [] };
-      schedule.specialLeave = schedule.specialLeave || [];
-      const existing = schedule.specialLeave.find((r) => r.id === p.requestId);
-      if (existing) {
-        existing.status = "approved";
-      } else {
-        schedule.specialLeave.push({
-          id: p.requestId, employeeId: p.employeeId, date: p.date,
-          type: "annual", status: "approved", requestedAt: new Date().toISOString(),
-          decidedAt: new Date().toISOString(),
-        });
-      }
-      await writeJSONWithRetry(`data/schedule-${month}.json`, schedule, `核准 ${findEmpName(p.employeeId)} 的特休申請 ${p.date}`, token);
-    } else if (pendingPayload.type === "reset_password") {
-      const p = pendingPayload;
-      const emp = employeesCache.find((e) => e.id === p.employeeId);
-      if (!emp) throw new Error("找不到對應員工");
-      emp.passwordHash = p.newPasswordHash;
-      await writeJSONWithRetry("data/employees.json", employeesCache, `核准 ${p.phone} 重設密碼`, token);
-    }
+    await applyPayload(pendingPayload);
     toast("已核准並寫入系統", "success");
     pendingPayload = null;
     document.getElementById("applyCard").style.display = "none";
