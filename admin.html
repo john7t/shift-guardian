@@ -130,6 +130,21 @@
         <button class="btn btn-secondary" id="btnClearToken">清除本機 Token</button>
       </div>
       <p id="tokenStatus" class="hint" style="margin-top:10px;"></p>
+
+      <details style="margin-top:14px;">
+        <summary class="hint" style="cursor:pointer;">進階：GitHub 帳號／Repo 名稱（一般不需要設定，系統會自動從網址判斷）</summary>
+        <div style="margin-top:10px;">
+          <p class="hint">目前自動判斷結果：<strong id="autoOwnerRepo"></strong>。只有網址判斷不出正確結果時（例如使用自訂網域）才需要手動覆寫，這個設定只會存在你這台裝置。</p>
+          <label>GitHub 帳號</label>
+          <input type="text" id="overrideOwner" placeholder="留空則使用自動判斷" />
+          <label>Repo 名稱</label>
+          <input type="text" id="overrideRepo" placeholder="留空則使用自動判斷" />
+          <div class="btn-row">
+            <button class="btn btn-secondary" id="btnSaveOverride">儲存覆寫</button>
+            <button class="btn btn-secondary" id="btnClearOverride">清除覆寫，改回自動判斷</button>
+          </div>
+        </div>
+      </details>
     </div>
 
   </div>
@@ -211,7 +226,29 @@ function restoreTokenUI() {
   } else {
     statusEl.textContent = "尚未設定 Token，無法執行任何寫入操作。";
   }
+
+  document.getElementById("autoOwnerRepo").textContent = `${GITHUB_OWNER} / ${REPO_NAME}`;
+  const override = JSON.parse(localStorage.getItem(LS_KEY_GITHUB_OVERRIDE) || "null");
+  if (override) {
+    document.getElementById("overrideOwner").value = override.owner || "";
+    document.getElementById("overrideRepo").value = override.repo || "";
+  }
 }
+
+document.getElementById("btnSaveOverride").onclick = () => {
+  const owner = document.getElementById("overrideOwner").value.trim();
+  const repo = document.getElementById("overrideRepo").value.trim();
+  if (!owner || !repo) return toast("請完整填寫帳號與repo名稱，或改用「清除覆寫」", "error");
+  localStorage.setItem(LS_KEY_GITHUB_OVERRIDE, JSON.stringify({ owner, repo }));
+  toast("已儲存覆寫設定，重新整理套用中…", "success");
+  setTimeout(() => location.reload(), 600);
+};
+
+document.getElementById("btnClearOverride").onclick = () => {
+  localStorage.removeItem(LS_KEY_GITHUB_OVERRIDE);
+  toast("已清除覆寫，改回自動判斷，重新整理套用中…", "success");
+  setTimeout(() => location.reload(), 600);
+};
 
 document.getElementById("btnSaveToken").onclick = async () => {
   const t = document.getElementById("tokenInput").value.trim();
@@ -549,8 +586,7 @@ document.getElementById("btnApprove").onclick = async () => {
     if (pendingPayload.type === "register") {
       const p = pendingPayload;
       let emp = employeesCache.find((e) => e.id === p.employeeId);
-      const isFirstActive = employeesCache.filter((e) => e.status === "active").length === 0;
-      const grantManager = p.isBypassAdmin || isFirstActive;
+      const grantManager = p.isBypassAdmin;
 
       if (!emp) {
         // 管理員手機自助註冊、系統內尚無此筆紀錄 → 直接新增
