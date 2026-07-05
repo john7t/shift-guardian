@@ -27,20 +27,5 @@
     "passwordHash": "",
     "isManager": false,
     "createdAt": "2026-07-05T00:36:14.002Z"
-  },
-  {
-    "id": "emp_08ihhsd6",
-    "phone": "0975379800",
-    "activationCode": "",
-    "createdAt": "2026-07-05T00:55:23.597Z",
-    "lastName": "王",
-    "firstName": "小華",
-    "alias": "華",
-    "shift": "A2",
-    "hireDate": "2026-06-01",
-    "passwordHash": "9af15b336e6a9619928537df30b2e6a2376569fcf9d7e773eccede65606529a0",
-    "noSchedule": false,
-    "status": "active",
-    "isManager": false
   }
 ]
