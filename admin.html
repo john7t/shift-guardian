@@ -9,10 +9,12 @@
 <body>
 <div class="wrap">
   <div class="topbar">
-    <a href="index.html" style="text-decoration:none;"><div class="brand"><span class="dot"></span><span id="brandName">Shift Guardian</span></div></a>
+    <div style="display:flex; align-items:center; gap:14px;">
+      <a href="index.html" style="text-decoration:none;"><div class="brand"><span class="dot"></span><span id="brandName">Shift Guardian</span></div></a>
+      <a href="index.html" style="font-size:13px; color:var(--text-dim); text-decoration:none; padding:6px 10px; border-radius:999px; border:1px solid var(--line);">公開月曆</a>
+    </div>
     <div class="nav-links">
-      <a href="index.html">公開月曆</a>
-      <a href="employee.html">員工登入</a>
+      <a href="employee.html" id="navEmployeeLink">員工登入</a>
     </div>
   </div>
 
@@ -272,6 +274,19 @@ document.getElementById("btnCheckPerm").onclick = () => checkPermission(false);
 // 頁面載入時，如果先前已經通過檢查，自動幫你重新驗證一次（不用每次切頁都手動點）
 checkPermission(true);
 initTopbarShrink();
+
+(async function updateNavEmployeeLabel() {
+  const saved = localStorage.getItem(LS_KEY_EMPLOYEE_SESSION);
+  if (!saved) return;
+  try {
+    const session = JSON.parse(saved);
+    const employees = (await readJSON("data/employees.json").catch(() => [])) || [];
+    const emp = employees.find((e) => e.id === session.employeeId);
+    if (emp) {
+      document.getElementById("navEmployeeLink").textContent = emp.alias || emp.firstName || "員工登入";
+    }
+  } catch (e) {}
+})();
 
 function grantAccess() {
   document.getElementById("permCard").style.display = "none";
@@ -748,7 +763,7 @@ function renderLocalPendingList() {
   }
   el.innerHTML = items.map((item, idx) => `
     <div class="row-item">
-      <div>${renderApplyPayloadPreview(item.payload)}<div class="meta">送出時間：${item.submittedAt}</div>
+      <div>${renderApplyPayloadPreview(item.payload)}<div class="meta">送出時間：${taipeiTimeDisplay(item.submittedAt)}</div>
         <p id="lpMsg${idx}" class="inline-alert"></p>
       </div>
       <div style="display:flex; gap:8px;">

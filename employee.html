@@ -10,9 +10,11 @@
 <body>
 <div class="wrap">
   <div class="topbar">
-    <a href="admin.html" style="text-decoration:none;"><div class="brand"><span class="dot"></span><span id="brandName">Shift Guardian</span></div></a>
+    <div style="display:flex; align-items:center; gap:14px;">
+      <a href="admin.html" style="text-decoration:none;"><div class="brand"><span class="dot"></span><span id="brandName">Shift Guardian</span></div></a>
+      <a href="index.html" style="font-size:13px; color:var(--text-dim); text-decoration:none; padding:6px 10px; border-radius:999px; border:1px solid var(--line);">公開月曆</a>
+    </div>
     <div class="nav-links">
-      <a href="index.html">公開月曆</a>
       <a href="employee.html" class="active" id="navEmployeeLink">員工登入</a>
     </div>
   </div>
@@ -118,10 +120,10 @@
     <label>再輸入一次密碼</label>
     <input type="password" id="setPassword2" inputmode="numeric" maxlength="4" placeholder="••••" />
     <div class="btn-row">
-      <button class="btn btn-primary" id="btnSubmitSetup">儲存（待主管於此裝置或用LINE審核）</button>
+      <button class="btn btn-primary" id="btnSubmitSetup">儲存</button>
     </div>
     <div class="btn-row">
-      <button class="btn btn-secondary" id="btnSetupBack">返回上一步，讓其他人先操作</button>
+      <button class="btn btn-secondary" id="btnSetupBack">返回上一步</button>
     </div>
   </div>
 
@@ -160,7 +162,7 @@
         <div class="day-grid" id="offDayGrid" style="margin-top:12px;"></div>
         <div class="hint" style="margin-top:8px;">已選 <strong id="selectedCount">0</strong> / <span id="reqDaysNum2"></span> 天</div>
         <div class="btn-row">
-          <button class="btn btn-primary" id="btnSendOffDays">儲存排休（待主管於此裝置或用LINE審核）</button>
+          <button class="btn btn-primary" id="btnSendOffDays">儲存排休</button>
         </div>
       </div>
       <div id="offDaysPendingArea" style="display:none;">
@@ -179,7 +181,7 @@
       <label>選擇日期</label>
       <input type="date" id="annualLeaveDate" />
       <div class="btn-row">
-        <button class="btn btn-primary" id="btnApplyAnnual">儲存申請（待主管於此裝置或用LINE審核）</button>
+        <button class="btn btn-primary" id="btnApplyAnnual">儲存申請</button>
       </div>
     </div>
 
@@ -247,10 +249,13 @@ document.getElementById("btnPhoneNext").onclick = async () => {
 
   if (phone === ADMIN_BYPASS_PHONE) {
     if (emp && emp.status === "active") {
-      currentEmployee = emp;
-      setSession(emp.id, phone);
-      return showMainPanel();
+      // 已完成建檔：跟一般員工一樣需要輸入密碼，避免只要知道手機號碼就能免驗證登入
+      pendingPhoneForPw = phone;
+      document.getElementById("pwPhoneLabel").textContent = `手機：${phone}（${emp.alias || emp.firstName || ""}）`;
+      document.getElementById("pwInput").value = "";
+      return showScreen("screenPassword");
     }
+    // 尚未建檔：僅在系統還沒有這支手機的資料時才免驗證，用於初次開通
     currentEmployee = emp || { id: generateEmployeeId(), phone, status: "issued" };
     setSession(currentEmployee.id, phone);
     return enterSetupOrPendingScreen();
@@ -279,7 +284,8 @@ document.getElementById("btnPwBack").onclick = () => showScreen("screenPhone");
 document.getElementById("btnCodeConfirm").onclick = () => {
   const code = document.getElementById("codeInput").value.trim();
   const emp = employeesCache.find((e) => e.phone === pendingPhoneForCode);
-  if (!emp || emp.activationCode !== code) return toast("啟用碼不正確", "error");
+  const normalize = (s) => (s || "").replace(/-/g, "");
+  if (!emp || normalize(emp.activationCode) !== normalize(code)) return toast("啟用碼不正確", "error");
   currentEmployee = emp;
   setSession(emp.id, emp.phone);
   enterSetupOrPendingScreen();
@@ -310,10 +316,6 @@ function touchActivity() {
 
 document.getElementById("btnUnlock").onclick = async () => {
   const pw = document.getElementById("lockPwInput").value.trim();
-  if (currentEmployee.phone === ADMIN_BYPASS_PHONE) {
-    localStorage.setItem(LS_KEY_EMPLOYEE_UNLOCKED_AT, String(Date.now()));
-    return showMainPanel();
-  }
   const hash = await hashText(pw);
   if (currentEmployee.passwordHash !== hash) return toast("密碼不正確", "error");
   localStorage.setItem(LS_KEY_EMPLOYEE_UNLOCKED_AT, String(Date.now()));
@@ -413,7 +415,7 @@ document.getElementById("btnSubmitSetup").onclick = async () => {
     isBypassAdmin: currentEmployee.phone === ADMIN_BYPASS_PHONE,
   };
   savePending(currentEmployee.id, "register", payload);
-  renderPendingRegister(payload, new Date().toLocaleString());
+  renderPendingRegister(payload, new Date().toISOString());
   showScreen("screenPendingRegister");
   toast("已儲存，若在公司公務機上可請主管直接在後台審核；不在店內則可用下方按鈕改傳LINE", "success");
 };
@@ -423,7 +425,7 @@ function renderPendingRegister(payload, submittedAt) {
     <div class="row-item" style="opacity:0.6;">
       <div>
         <strong>${payload.lastName}${payload.firstName}（${payload.alias}）</strong>
-        <div class="meta">班別：${getShiftLabel(payload.shift)}｜到職日：${payload.hireDate}｜送出時間：${submittedAt}</div>
+        <div class="meta">班別：${getShiftLabel(payload.shift)}｜到職日：${payload.hireDate}｜送出時間：${taipeiTimeDisplay(submittedAt)}</div>
       </div>
       <span class="status-pill status-pending">待主管確認</span>
     </div>`;
@@ -448,9 +450,30 @@ document.getElementById("btnSetupBack").onclick = () => {
   showScreen("screenPhone");
 };
 
+let approvalCheckCooldownUntil = 0;
+let approvalCheckTimerHandle = null;
+
+function startApprovalCheckCooldown() {
+  const btn = document.getElementById("btnCheckApprovalStatus");
+  approvalCheckCooldownUntil = Date.now() + 60 * 1000;
+  btn.disabled = true;
+  clearInterval(approvalCheckTimerHandle);
+  approvalCheckTimerHandle = setInterval(() => {
+    const remain = Math.ceil((approvalCheckCooldownUntil - Date.now()) / 1000);
+    if (remain <= 0) {
+      clearInterval(approvalCheckTimerHandle);
+      btn.disabled = false;
+      btn.textContent = "檢查審核情形";
+    } else {
+      btn.textContent = `檢查審核情形（${remain}秒後可再按）`;
+    }
+  }, 1000);
+}
+
 document.getElementById("btnCheckApprovalStatus").onclick = async () => {
   const resultEl = document.getElementById("approvalCheckResult");
   resultEl.textContent = "檢查中…";
+  startApprovalCheckCooldown();
   const employees = (await readJSON("data/employees.json").catch(() => [])) || [];
   const emp = employees.find((e) => e.id === currentEmployee.id);
   if (emp && emp.status === "active") {
@@ -459,7 +482,7 @@ document.getElementById("btnCheckApprovalStatus").onclick = async () => {
     clearPending(currentEmployee.id, "register");
     setTimeout(() => showMainPanel(), 500);
   } else {
-    resultEl.textContent = `尚未核准（檢查時間：${new Date().toLocaleString("zh-TW")}）`;
+    resultEl.textContent = `尚未核准（檢查時間：${taipeiTimeDisplay(new Date().toISOString())}）`;
   }
 };
 
@@ -755,7 +778,7 @@ document.getElementById("btnLogout").onclick = doLogout;
   }
 
   const unlockedAt = Number(localStorage.getItem(LS_KEY_EMPLOYEE_UNLOCKED_AT) || 0);
-  if (emp.phone !== ADMIN_BYPASS_PHONE && Date.now() - unlockedAt > IDLE_TIMEOUT_MS) {
+  if (Date.now() - unlockedAt > IDLE_TIMEOUT_MS) {
     showScreen("screenLock");
     return;
   }
@@ -764,7 +787,6 @@ document.getElementById("btnLogout").onclick = doLogout;
 
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState !== "visible" || !currentEmployee) return;
-  if (currentEmployee.phone === ADMIN_BYPASS_PHONE) return;
   const unlockedAt = Number(localStorage.getItem(LS_KEY_EMPLOYEE_UNLOCKED_AT) || 0);
   if (Date.now() - unlockedAt > IDLE_TIMEOUT_MS && document.getElementById("mainPanel").style.display === "block") {
     showScreen("screenLock");

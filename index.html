@@ -10,9 +10,11 @@
 <div class="wrap">
 
   <div class="topbar">
-    <a href="admin.html" style="text-decoration:none;"><div class="brand"><span class="dot"></span><span id="brandName">Shift Guardian</span></div></a>
+    <div style="display:flex; align-items:center; gap:14px;">
+      <a href="admin.html" style="text-decoration:none;"><div class="brand"><span class="dot"></span><span id="brandName">Shift Guardian</span></div></a>
+      <a href="index.html" class="active" style="font-size:13px; color:var(--text-dim); text-decoration:none; padding:6px 10px; border-radius:999px; border:1px solid var(--line);">公開月曆</a>
+    </div>
     <div class="nav-links">
-      <a href="index.html" class="active">公開月曆</a>
       <a href="employee.html" id="navEmployeeLink">員工登入</a>
     </div>
   </div>
@@ -332,8 +334,8 @@ function renderLeaveLog(employees, schedule, reveal) {
     const name = reveal ? (emp ? (emp.alias || emp.lastName + emp.firstName) : r.employeeId) : (emp ? getShiftLabel(emp.shift) : "-");
     const statusLabel = { approved: "已核准", pending: "待審核", rejected: "已駁回" }[r.status] || r.status;
     const statusClass = { approved: "status-approved", pending: "status-pending", rejected: "status-rejected" }[r.status];
-    const submitted = r.requestedAt ? new Date(r.requestedAt).toLocaleString("zh-TW") : "-";
-    const decided = r.decidedAt ? new Date(r.decidedAt).toLocaleString("zh-TW") : "-";
+    const submitted = r.requestedAt ? taipeiTimeDisplay(r.requestedAt) : "-";
+    const decided = r.decidedAt ? taipeiTimeDisplay(r.decidedAt) : "-";
     return `<div class="row-item">
       <div>
         <strong>${name}</strong> 申請 ${r.date}
