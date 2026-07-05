@@ -43,6 +43,22 @@ a { color: inherit; }
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 20px;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: var(--ink);
+  padding: 10px 0;
+  transition: padding 0.2s ease;
+}
+.topbar.shrink {
+  padding: 4px 0;
+}
+.topbar.shrink .brand {
+  font-size: 14px;
+}
+.topbar.shrink .nav-links a {
+  font-size: 11px;
+  padding: 4px 9px;
 }
 
 .brand {
@@ -228,7 +244,36 @@ table.cal td.emp-name {
 @keyframes blinkRed {
   50% { opacity: 0.25; }
 }
-.badge.support { background: rgba(74,95,199,0.16); color: var(--dusk); }
+.badge.support { background: rgba(74,95,199,0.16); color: var(--dusk); line-height: 1.15; }
+
+/* ---------- 二次確認按鈕（取代 confirm() 彈窗） ---------- */
+.btn-confirming {
+  background: var(--danger) !important;
+  color: #fff !important;
+  font-weight: 700;
+}
+
+/* ---------- 寫入中狀態 ---------- */
+.btn.is-loading {
+  opacity: 0.6;
+  cursor: wait;
+}
+.btn .spinner {
+  display: inline-block;
+  width: 12px; height: 12px;
+  border: 2px solid rgba(255,255,255,0.4);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  margin-right: 6px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ---------- 按鈕下方紅字警示 ---------- */
+.inline-alert { font-size: 13px; margin-top: 8px; }
+.inline-alert.error { color: var(--danger); }
+.inline-alert.success { color: var(--success); }
+.inline-alert.info { color: var(--text-dim); }
 
 /* ---------- Day picker grid ---------- */
 .day-grid {
