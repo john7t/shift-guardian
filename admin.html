@@ -30,23 +30,21 @@
     <!-- 公務機模式切換 -->
     <div class="card">
       <h2>公務機模式</h2>
-      <p class="hint">開啟後，這台裝置（不管是員工登入頁還是主管後台）都會**只用本機儲存**來運作：員工送出資料不會強迫跳LINE，主管在「本機待審清單」直接統一審核。適合固定放在店裡、大家輪流用的公務手機/iPad。你自己的手機建議保持關閉。</p>
+      <p class="hint">開啟公務機模式後：<br>
+      員工可以登入自己的帳號，用這台設備來運作排休作業，可允許多人填寫排班資料。<br>
+      主管可在本設備進行：每月排休鎖定作業，審核員工特休申請作業，設定員工有主管權限。<br>
+      公務機適合固定放在店裡、大家輪流用的公務手機/iPad。主管作業仍需以主管個人帳號密碼進行登入。</p>
       <div class="btn-row" style="margin-top:0;">
         <button class="btn btn-primary" id="btnToggleKiosk">開啟公務機模式</button>
       </div>
       <p id="kioskStatus" class="hint" style="margin-top:10px;"></p>
     </div>
 
-    <!-- 唯讀模式提示 -->
-    <div class="card" id="readOnlyBanner" style="display:none; border-color: var(--dawn);">
-      <h2 style="color:var(--dawn);">目前是檢視模式（唯讀）</h2>
-      <p class="hint">這台裝置沒有設定 GitHub Token，可以查看所有資料，但無法核准申請、開通員工或做任何寫入操作。若要正式寫入，請在有設定 Token 的那台裝置（例如公司公務機）上操作。</p>
-    </div>
-
     <!-- 本機待審清單（公用機情境：多人在同一台裝置累積的待審資料） -->
     <div class="card">
       <h2>本機待審清單</h2>
-      <p class="hint">列出這台裝置上，所有人累積但尚未經主管處理的申請，適合公用機情境：多人輪流用同一台裝置排休，最後由主管在這台機器上統一審核上線。</p>
+      <p class="hint">列出這台裝置上，主管在登入後所收到所有的尚未經主管處理的特休申請。<br>
+      如為公務機模式的話，可多人輪流登入，用這一台裝置進行排休規劃及特休申請，最後主管可在登入後在這台機器上進行員工填寫的申請單審核工作並將結果送至主機上。</p>
       <div id="localPendingList" class="row-list"></div>
     </div>
 
@@ -70,6 +68,26 @@
       <div class="btn-row"><button class="btn btn-primary" id="btnSaveStoreName">儲存名稱</button></div>
     </div>
 
+    <!-- 資料備份與還原 -->
+    <div class="card">
+      <h2>資料備份／還原</h2>
+      <p class="hint" style="color:var(--danger);">⚠️ 重要：以後只要更新程式碼（html/css/js），絕對不要連 <code>data/</code> 資料夾一起覆蓋上傳，否則會把員工、排班等真實資料全部洗掉變回空白。建議每次要上傳新版程式碼「之前」，先在這裡按一次「匯出備份」存好。</p>
+      <div class="btn-row" style="margin-top:0;">
+        <button class="btn btn-primary" id="btnExportBackup">建立備份</button>
+      </div>
+      <p class="hint" id="exportModeHint" style="margin-top:6px;"></p>
+      <p id="exportStatus" class="hint" style="margin-top:10px;"></p>
+
+      <div style="margin-top:18px; padding-top:14px; border-top:1px solid var(--line);">
+        <label>選擇備份檔還原</label>
+        <input type="file" id="importFile" accept="application/json" />
+        <div class="btn-row">
+          <button class="btn btn-danger" id="btnImportBackup">還原此備份（會覆蓋目前線上資料）</button>
+        </div>
+        <p id="importStatus" class="hint" style="margin-top:10px;"></p>
+      </div>
+    </div>
+
     <!-- 開通新員工 -->
     <div class="card">
       <h2>開通新員工</h2>
@@ -90,7 +108,7 @@
     <!-- 主管權限管理 -->
     <div class="card">
       <h2>主管權限管理</h2>
-      <p class="hint">勾選的員工將可在主管後台通過「檢查權限」，並自行輸入 Token 進行審核與寫入。系統管理員帳號永遠擁有主管權限，不受此設定影響。</p>
+      <p class="hint">勾選的員工將可進入主管後台，但是沒有連線至主機的能力，需另外在主管後台自行輸入連線碼。系統管理員帳號永遠擁有主管權限，不受此設定影響。</p>
       <div class="row-list" id="managerList"></div>
       <div class="btn-row"><button class="btn btn-primary" id="btnSaveManagers">儲存主管權限設定</button></div>
     </div>
@@ -132,6 +150,18 @@
       <label>
         <input type="radio" name="leaveMode" value="labor_law" style="width:auto; display:inline;" /> 依勞基法級距自動計算
       </label>
+      <details style="margin:6px 0 0 24px;">
+        <summary class="hint" style="cursor:pointer;">查看勞基法特休天數級距說明 ›</summary>
+        <div class="hint" style="margin-top:8px; line-height:1.9;">
+          年資滿半年：3天<br>
+          年資滿1年：7天<br>
+          年資滿2年：10天<br>
+          年資滿3年～未滿5年：14天<br>
+          年資滿5年～未滿10年：15天<br>
+          年資滿10年以上：每多滿1年增加1天，最高30天<br><br>
+          特休若當年度未休完，依法雇主應發給工資折算（俗稱「特休折現」），或經勞雇雙方協商可遞延至次一年度使用，遞延後仍未休畢者，剩餘天數的工資仍應由雇主發給。實際遞延與折現方式建議依公司規定並諮詢勞動主管機關或專業人士確認。
+        </div>
+      </details>
       <label>
         <input type="radio" name="leaveMode" value="fixed" style="width:auto; display:inline;" /> 固定天數
       </label>
@@ -140,6 +170,12 @@
         <input type="text" id="fixedDaysInput" placeholder="例如 7" />
       </div>
       <div class="btn-row"><button class="btn btn-primary" id="btnSavePolicy">儲存政策設定</button></div>
+    </div>
+
+    <!-- 唯讀模式提示 -->
+    <div class="card" id="readOnlyBanner" style="display:none; border-color: var(--dawn);">
+      <h2 style="color:var(--dawn);">目前是檢視模式（唯讀）</h2>
+      <p class="hint">這台裝置沒有設定 GitHub Token，可以查看所有資料，但無法核准申請、開通員工或做任何寫入操作。若要正式寫入，請在有設定 Token 的那台裝置（例如公司公務機）上操作。</p>
     </div>
 
     <!-- Token 設定（每位主管在自己裝置上各自輸入） -->
@@ -292,6 +328,7 @@ document.getElementById("btnSaveToken").onclick = async () => {
   toast("Token 已儲存", "success");
   updateReadOnlyUI();
   updateKioskUI();
+  updateExportModeHint();
 };
 
 document.getElementById("btnClearToken").onclick = () => {
@@ -301,6 +338,7 @@ document.getElementById("btnClearToken").onclick = () => {
   document.getElementById("tokenStatus").textContent = "已清除本機 Token。";
   updateReadOnlyUI();
   updateKioskUI();
+  updateExportModeHint();
 };
 
 function updateKioskUI() {
@@ -312,7 +350,7 @@ function updateKioskUI() {
   } else {
     document.getElementById("kioskStatus").textContent = on
       ? "此裝置目前為「公務機模式」：員工登入頁送出資料只會存本機，不會強迫跳LINE。"
-      : "此裝置目前為一般模式：員工登入頁送出資料後，仍會提供LINE通知主管的選項。";
+      : "此裝置目前為一般模式：員工為離線模式，所進行各項操作，均存在手機內的暫存資料夾，沒有跟主機同步，需要透過有連線能力的主管來進行資料連線至主機進行更新。";
   }
 }
 
@@ -321,6 +359,7 @@ document.getElementById("btnToggleKiosk").onclick = async () => {
   if (on) {
     localStorage.removeItem(LS_KEY_KIOSK_MODE);
     updateKioskUI();
+  updateExportModeHint();
     toast("已關閉公務機模式", "success");
     return;
   }
@@ -333,6 +372,7 @@ document.getElementById("btnToggleKiosk").onclick = async () => {
   if (!token) {
     btn.disabled = false;
     updateKioskUI();
+  updateExportModeHint();
     toast("尚未設定 Token，請先在下方「我的 GitHub Token 設定」設定並驗證成功後，才能開啟公務機模式", "error");
     return;
   }
@@ -341,12 +381,14 @@ document.getElementById("btnToggleKiosk").onclick = async () => {
 
   if (!result.ok) {
     updateKioskUI();
+  updateExportModeHint();
     toast("Token 驗證失敗，無法開啟公務機模式：" + result.reason, "error");
     return;
   }
 
   localStorage.setItem(LS_KEY_KIOSK_MODE, "1");
   updateKioskUI();
+  updateExportModeHint();
   toast("Token 可用，已開啟公務機模式", "success");
 };
 
@@ -365,6 +407,7 @@ function updateReadOnlyUI() {
   const writeButtonIds = [
     "btnSaveStoreName", "btnCreateEmployee", "btnSaveManagers",
     "btnLockMonth", "btnUnlockMonth", "btnSavePolicy", "btnAddSupport", "btnApprove",
+    "btnImportBackup",
   ];
   writeButtonIds.forEach((id) => {
     const el = document.getElementById(id);
@@ -376,6 +419,7 @@ function updateReadOnlyUI() {
 async function boot() {
   restoreTokenUI();
   updateKioskUI();
+  updateExportModeHint();
   await loadEmployees();
   await loadConfig();
   document.getElementById("brandName").textContent = configCache.storeName || "Shift Guardian";
@@ -760,6 +804,137 @@ document.getElementById("btnApprove").onclick = async () => {
   } catch (err) {
     errEl.textContent = "寫入失敗：" + err.message;
     errEl.style.display = "block";
+  }
+};
+
+// ---------- 資料備份／還原 ----------
+async function listScheduleFiles() {
+  try {
+    const res = await fetch(`${GITHUB_API_BASE}/data`, {
+      headers: { Accept: "application/vnd.github+json" },
+    });
+    if (!res.ok) return [];
+    const items = await res.json();
+    return items
+      .filter((it) => it.type === "file" && /^schedule-\d{4}-\d{2}\.json$/.test(it.name))
+      .map((it) => it.name);
+  } catch (e) {
+    return [];
+  }
+}
+
+async function buildBackup() {
+  const employees = (await readJSON("data/employees.json").catch(() => [])) || [];
+  const config = (await readJSON("data/config.json").catch(() => null)) || {};
+  const scheduleFiles = await listScheduleFiles();
+  const schedules = {};
+  for (const fname of scheduleFiles) {
+    const monthKey = fname.replace("schedule-", "").replace(".json", "");
+    schedules[monthKey] = await readJSON(`data/${fname}`).catch(() => null);
+  }
+  return {
+    exportedAt: new Date().toISOString(),
+    repo: `${GITHUB_OWNER}/${REPO_NAME}`,
+    employees,
+    config,
+    schedules,
+  };
+}
+
+document.getElementById("btnExportBackup").onclick = async () => {
+  const btn = document.getElementById("btnExportBackup");
+  const statusEl = document.getElementById("exportStatus");
+  btn.disabled = true;
+
+  const useGithub = isKioskMode() && !!token;
+  statusEl.textContent = useGithub ? "備份中，寫入 GitHub 中，請稍候…" : "備份中，準備下載，請稍候…";
+
+  try {
+    const backup = await buildBackup();
+
+    if (useGithub) {
+      const now = new Date();
+      const stamp = now.toISOString().replace(/[:.]/g, "-");
+      const path = `backups/backup-${stamp}.json`;
+      await writeJSONWithRetry(path, backup, `公務機自動備份 ${now.toLocaleString("zh-TW")}`, token);
+      statusEl.textContent = `已存到 GitHub：${path}（${backup.employees.length} 位員工、${Object.keys(backup.schedules).length} 個月份資料）`;
+      toast("備份已存到 GitHub", "success");
+    } else {
+      const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      const dateStr = new Date().toISOString().slice(0, 10);
+      a.href = url;
+      a.download = `shift-guardian-backup-${dateStr}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      statusEl.textContent = `匯出完成：${backup.employees.length} 位員工、${Object.keys(backup.schedules).length} 個月份的排班資料。檔案已下載，請妥善保存。`;
+      toast("備份已下載", "success");
+    }
+  } catch (err) {
+    statusEl.textContent = "備份失敗：" + err.message;
+    toast("備份失敗：" + err.message, "error");
+  }
+  btn.disabled = false;
+};
+
+function updateExportModeHint() {
+  const el = document.getElementById("exportModeHint");
+  if (isKioskMode() && token) {
+    el.textContent = "此裝置為公務機模式且Token可用：按下後會直接把備份存進 GitHub 的 backups/ 資料夾。";
+  } else {
+    el.textContent = "此裝置非公務機模式（或尚無Token）：按下後會把備份下載到這台裝置。";
+  }
+}
+
+document.getElementById("btnImportBackup").onclick = async () => {
+  if (!requireToken()) return;
+  const fileInput = document.getElementById("importFile");
+  const statusEl = document.getElementById("importStatus");
+  if (!fileInput.files || fileInput.files.length === 0) {
+    return toast("請先選擇備份檔", "error");
+  }
+
+  let backup;
+  try {
+    const text = await fileInput.files[0].text();
+    backup = JSON.parse(text);
+  } catch (e) {
+    return toast("備份檔格式錯誤，無法解析", "error");
+  }
+
+  if (!backup.employees || !backup.config) {
+    return toast("這不是有效的備份檔（缺少必要欄位）", "error");
+  }
+
+  const empCount = backup.employees.length;
+  const monthCount = Object.keys(backup.schedules || {}).length;
+  const exportedAt = backup.exportedAt ? new Date(backup.exportedAt).toLocaleString("zh-TW") : "未知時間";
+
+  const confirmed = confirm(
+    `即將還原備份（匯出時間：${exportedAt}）：\n- ${empCount} 位員工\n- ${monthCount} 個月份的排班資料\n\n這會覆蓋目前線上的資料，確定要繼續嗎？`
+  );
+  if (!confirmed) return;
+
+  statusEl.textContent = "還原中，請稍候…";
+  try {
+    await writeJSONWithRetry("data/employees.json", backup.employees, "從備份還原員工資料", token);
+    await writeJSONWithRetry("data/config.json", backup.config, "從備份還原系統設定", token);
+    for (const monthKey of Object.keys(backup.schedules || {})) {
+      const schedule = backup.schedules[monthKey];
+      if (schedule) {
+        await writeJSONWithRetry(`data/schedule-${monthKey}.json`, schedule, `從備份還原 ${monthKey} 排班資料`, token);
+      }
+    }
+    statusEl.textContent = `還原完成：${empCount} 位員工、${monthCount} 個月份的排班資料已寫回線上。`;
+    toast("備份已還原", "success");
+    await loadEmployees();
+    await loadMonthAdmin();
+  } catch (err) {
+    statusEl.textContent = "還原失敗：" + err.message;
+    toast("還原失敗：" + err.message, "error");
   }
 };
 
