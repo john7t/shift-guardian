@@ -18,14 +18,30 @@
     "id": "emp_dhywf5dt",
     "phone": "0912456789",
     "activationCode": "300-995",
-    "status": "issued",
-    "lastName": "",
-    "firstName": "",
-    "alias": "",
-    "shift": "",
-    "hireDate": "",
-    "passwordHash": "",
+    "status": "active",
+    "lastName": "陳",
+    "firstName": "小婷",
+    "alias": "婷",
+    "shift": "B",
+    "hireDate": "2024-01-01",
+    "passwordHash": "9af15b336e6a9619928537df30b2e6a2376569fcf9d7e773eccede65606529a0",
     "isManager": false,
-    "createdAt": "2026-07-05T00:36:14.002Z"
+    "createdAt": "2026-07-05T00:36:14.002Z",
+    "noSchedule": false
+  },
+  {
+    "id": "emp_08ihhsd6",
+    "phone": "0975379800",
+    "activationCode": "",
+    "createdAt": "2026-07-05T00:55:23.597Z",
+    "lastName": "王",
+    "firstName": "小華",
+    "alias": "華",
+    "shift": "A2",
+    "hireDate": "2026-06-01",
+    "passwordHash": "9af15b336e6a9619928537df30b2e6a2376569fcf9d7e773eccede65606529a0",
+    "noSchedule": false,
+    "status": "active",
+    "isManager": false
   }
 ]
