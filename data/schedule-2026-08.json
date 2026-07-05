@@ -1,0 +1,15 @@
+{
+  "month": "2026-08",
+  "status": "draft",
+  "days": {},
+  "specialLeave": [],
+  "support": [
+    {
+      "id": "req_r3kppl0u",
+      "employeeId": "emp_aqdhviyg",
+      "date": "2026-08-20",
+      "supportShift": "A2",
+      "createdAt": "2026-07-05T00:53:11.965Z"
+    }
+  ]
+}
