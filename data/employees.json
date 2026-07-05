@@ -13,5 +13,19 @@
     "noSchedule": false,
     "status": "active",
     "isManager": true
+  },
+  {
+    "id": "emp_dhywf5dt",
+    "phone": "0912456789",
+    "activationCode": "300-995",
+    "status": "issued",
+    "lastName": "",
+    "firstName": "",
+    "alias": "",
+    "shift": "",
+    "hireDate": "",
+    "passwordHash": "",
+    "isManager": false,
+    "createdAt": "2026-07-05T00:36:14.002Z"
   }
 ]
