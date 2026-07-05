@@ -9,11 +9,10 @@
 <body>
 <div class="wrap">
   <div class="topbar">
-    <div class="brand"><span class="dot"></span><span id="brandName">Shift Guardian</span></div>
+    <a href="index.html" style="text-decoration:none;"><div class="brand"><span class="dot"></span><span id="brandName">Shift Guardian</span></div></a>
     <div class="nav-links">
       <a href="index.html">公開月曆</a>
       <a href="employee.html">員工登入</a>
-      <a href="admin.html" class="active">主管後台</a>
     </div>
   </div>
 
@@ -56,7 +55,7 @@
         <button class="btn btn-primary" id="btnApprove">核准並寫入</button>
         <button class="btn btn-danger" id="btnReject">駁回</button>
       </div>
-      <p id="applyError" style="display:none; color:var(--danger); margin-top:10px; font-size:13px;"></p>
+      <p id="applyError" class="inline-alert"></p>
     </div>
 
     <!-- 公司/部門名稱 -->
@@ -66,6 +65,7 @@
       <label>名稱</label>
       <input type="text" id="storeNameInput" placeholder="例如：OO超商 大夜排班系統" />
       <div class="btn-row"><button class="btn btn-primary" id="btnSaveStoreName">儲存名稱</button></div>
+      <p id="storeNameStatus" class="inline-alert"></p>
     </div>
 
     <!-- 資料備份與還原 -->
@@ -111,21 +111,23 @@
       <p class="hint">勾選的員工將可進入主管後台，但是沒有連線至主機的能力，需另外在主管後台自行輸入連線碼。系統管理員帳號永遠擁有主管權限，不受此設定影響。</p>
       <div class="row-list" id="managerList"></div>
       <div class="btn-row"><button class="btn btn-primary" id="btnSaveManagers">儲存主管權限設定</button></div>
+      <p id="managerStatus" class="inline-alert"></p>
     </div>
 
     <!-- 支援排班登記 -->
     <div class="card">
       <h2>支援排班登記</h2>
       <p class="hint">當某班別當天人力短缺，可指定另一位當天有上班的員工支援，會顯示在他自己那天的格子上（例如「支A1」），不影響他原本的班別記錄。</p>
-      <label>支援月份</label>
-      <input type="text" id="supportMonth" placeholder="例如 2026-07" />
       <label>支援人員</label>
       <select id="supportEmployee"></select>
-      <label>支援日期</label>
-      <input type="date" id="supportDate" />
-      <label>支援班別</label>
+      <label>月份</label>
+      <select id="supportMonth"></select>
+      <div class="hint" style="margin-top:10px;">點選下方「空白（未排休）」的日期來設定支援日，紅色代表該員工當天已排休/特休，無法設定支援。</div>
+      <div class="day-grid" id="supportDayGrid" style="margin-top:10px;"></div>
+      <label style="margin-top:14px;">支援班別</label>
       <select id="supportShift"></select>
-      <div class="btn-row"><button class="btn btn-primary" id="btnAddSupport">新增支援登記</button></div>
+      <div class="btn-row"><button class="btn btn-primary" id="btnAddSupport" disabled>請先點選日期</button></div>
+      <p id="supportStatus" class="inline-alert"></p>
       <div id="supportList" class="row-list" style="margin-top:14px;"></div>
     </div>
 
@@ -170,6 +172,7 @@
         <input type="text" id="fixedDaysInput" placeholder="例如 7" />
       </div>
       <div class="btn-row"><button class="btn btn-primary" id="btnSavePolicy">儲存政策設定</button></div>
+      <p id="policyStatus" class="inline-alert"></p>
     </div>
 
     <!-- 唯讀模式提示 -->
@@ -202,6 +205,7 @@
             <button class="btn btn-secondary" id="btnSaveOverride">儲存覆寫</button>
             <button class="btn btn-secondary" id="btnClearOverride">清除覆寫，改回自動判斷</button>
           </div>
+          <p id="overrideStatus" class="inline-alert"></p>
         </div>
       </details>
     </div>
@@ -267,6 +271,7 @@ document.getElementById("btnCheckPerm").onclick = () => checkPermission(false);
 
 // 頁面載入時，如果先前已經通過檢查，自動幫你重新驗證一次（不用每次切頁都手動點）
 checkPermission(true);
+initTopbarShrink();
 
 function grantAccess() {
   document.getElementById("permCard").style.display = "none";
@@ -297,35 +302,33 @@ function restoreTokenUI() {
 document.getElementById("btnSaveOverride").onclick = () => {
   const owner = document.getElementById("overrideOwner").value.trim();
   const repo = document.getElementById("overrideRepo").value.trim();
-  if (!owner || !repo) return toast("請完整填寫帳號與repo名稱，或改用「清除覆寫」", "error");
+  if (!owner || !repo) return showInline("overrideStatus", "請完整填寫帳號與repo名稱，或改用「清除覆寫」", "error");
   localStorage.setItem(LS_KEY_GITHUB_OVERRIDE, JSON.stringify({ owner, repo }));
-  toast("已儲存覆寫設定，重新整理套用中…", "success");
+  showInline("overrideStatus", "已儲存覆寫設定，重新整理套用中…", "success");
   setTimeout(() => location.reload(), 600);
 };
 
 document.getElementById("btnClearOverride").onclick = () => {
   localStorage.removeItem(LS_KEY_GITHUB_OVERRIDE);
-  toast("已清除覆寫，改回自動判斷，重新整理套用中…", "success");
+  showInline("overrideStatus", "已清除覆寫，改回自動判斷，重新整理套用中…", "success");
   setTimeout(() => location.reload(), 600);
 };
 
 document.getElementById("btnSaveToken").onclick = async () => {
   const t = document.getElementById("tokenInput").value.trim();
-  if (!t) return toast("請輸入 Token", "error");
+  if (!t) return showInline("tokenStatus", "請輸入 Token", "error");
   const btn = document.getElementById("btnSaveToken");
-  btn.disabled = true; btn.textContent = "驗證中…";
+  setButtonLoading(btn, "驗證中…");
   const result = await validateAdminToken(t);
-  btn.disabled = false; btn.textContent = "驗證並存檔";
+  clearButtonLoading(btn);
 
   if (!result.ok) {
-    toast("Token 驗證失敗：" + result.reason, "error");
-    document.getElementById("tokenStatus").textContent = "驗證失敗：" + result.reason;
+    showInline("tokenStatus", "驗證失敗：" + result.reason, "error");
     return;
   }
   token = t;
   localStorage.setItem(LS_KEY_ADMIN_TOKEN, t);
-  document.getElementById("tokenStatus").textContent = "驗證成功，已儲存在本機。";
-  toast("Token 已儲存", "success");
+  showInline("tokenStatus", "驗證成功，已儲存在本機。", "success");
   updateReadOnlyUI();
   updateKioskUI();
   updateExportModeHint();
@@ -359,42 +362,42 @@ document.getElementById("btnToggleKiosk").onclick = async () => {
   if (on) {
     localStorage.removeItem(LS_KEY_KIOSK_MODE);
     updateKioskUI();
-  updateExportModeHint();
-    toast("已關閉公務機模式", "success");
+    updateExportModeHint();
+    showInline("kioskStatus", "已關閉公務機模式", "success");
     return;
   }
 
   // 開啟前先確認這台裝置的 Token 真的可用，避免公務機累積一堆待審資料卻無法寫入
   const btn = document.getElementById("btnToggleKiosk");
-  btn.disabled = true;
-  btn.textContent = "驗證 Token 中…";
+  setButtonLoading(btn, "驗證 Token 中…");
 
   if (!token) {
-    btn.disabled = false;
+    clearButtonLoading(btn);
     updateKioskUI();
-  updateExportModeHint();
-    toast("尚未設定 Token，請先在下方「我的 GitHub Token 設定」設定並驗證成功後，才能開啟公務機模式", "error");
+    updateExportModeHint();
+    showInline("kioskStatus", "尚未設定 Token，請先在下方「我的 GitHub Token 設定」設定並驗證成功後，才能開啟公務機模式", "error");
     return;
   }
   const result = await validateAdminToken(token);
-  btn.disabled = false;
+  clearButtonLoading(btn);
 
   if (!result.ok) {
     updateKioskUI();
-  updateExportModeHint();
-    toast("Token 驗證失敗，無法開啟公務機模式：" + result.reason, "error");
+    updateExportModeHint();
+    showInline("kioskStatus", "Token 驗證失敗，無法開啟公務機模式：" + result.reason, "error");
     return;
   }
 
   localStorage.setItem(LS_KEY_KIOSK_MODE, "1");
   updateKioskUI();
   updateExportModeHint();
-  toast("Token 可用，已開啟公務機模式", "success");
+  showInline("kioskStatus", "Token 可用，已開啟公務機模式", "success");
 };
 
-function requireToken() {
+function requireToken(statusElId) {
   if (!token) {
-    toast("請先在下方「我的 GitHub Token 設定」輸入並存檔（或改到有設定Token的公務機上操作）", "error");
+    if (statusElId) showInline(statusElId, "請先在下方「我的 GitHub Token 設定」輸入並存檔（或改到有設定Token的公務機上操作）", "error");
+    else toast("請先在下方「我的 GitHub Token 設定」輸入並存檔（或改到有設定Token的公務機上操作）", "error");
     return false;
   }
   return true;
@@ -406,7 +409,7 @@ function updateReadOnlyUI() {
   banner.style.display = isReadOnly ? "block" : "none";
   const writeButtonIds = [
     "btnSaveStoreName", "btnCreateEmployee", "btnSaveManagers",
-    "btnLockMonth", "btnUnlockMonth", "btnSavePolicy", "btnAddSupport", "btnApprove",
+    "btnLockMonth", "btnUnlockMonth", "btnSavePolicy", "btnApprove",
     "btnImportBackup",
   ];
   writeButtonIds.forEach((id) => {
@@ -454,10 +457,11 @@ function renderEmployeeList() {
           <strong>${e.alias || (e.lastName || "") + (e.firstName || "") || "(未設定姓名)"}</strong>${mgrTag}${noScheduleTag}
           <span class="meta">${e.phone} ｜ 啟用碼 ${e.activationCode || "-"} ｜ ${e.shift ? getShiftLabel(e.shift) : "未選班別"}</span>
         </div>
-        <div style="display:flex; align-items:center; gap:8px;">
+        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
           <span class="status-pill ${statusClass}">${statusLabel}</span>
           <button class="btn btn-secondary" style="padding:6px 10px; font-size:12px;" onclick="sendActivationLine('${e.phone}','${e.activationCode}')">傳LINE</button>
-          ${e.status !== "resigned" ? `<button class="btn btn-danger" style="padding:6px 10px; font-size:12px;" onclick="markResigned('${e.id}')">離職</button>` : ""}
+          ${e.status !== "resigned" ? `<button class="btn btn-danger" style="padding:6px 10px; font-size:12px;" onclick="confirmButtonClick(this, () => markResigned('${e.id}'), '確定？再按一次')">離職</button>` : ""}
+          <button class="btn btn-danger" style="padding:6px 10px; font-size:12px;" onclick="confirmButtonClick(this, () => deleteEmployee('${e.id}'), '確定刪除？再按一次')">刪除</button>
         </div>
       </div>`;
     })
@@ -480,19 +484,22 @@ function renderManagerList() {
 }
 
 document.getElementById("btnSaveManagers").onclick = async () => {
-  if (!requireToken()) return;
+  if (!requireToken("managerStatus")) return;
+  const btn = document.getElementById("btnSaveManagers");
   const checkboxes = document.querySelectorAll('#managerList input[type=checkbox]');
   checkboxes.forEach((cb) => {
     const emp = employeesCache.find((e) => e.id === cb.dataset.empid);
     if (emp) emp.isManager = cb.checked;
   });
+  setButtonLoading(btn, "儲存中…");
   try {
     await writeJSONWithRetry("data/employees.json", employeesCache, "更新主管權限設定", token);
-    toast("已儲存主管權限設定", "success");
+    showInline("managerStatus", "已儲存主管權限設定", "success");
     renderEmployeeList();
   } catch (err) {
-    toast("寫入失敗：" + err.message, "error");
+    showInline("managerStatus", "寫入失敗：" + err.message, "error");
   }
+  clearButtonLoading(btn);
 };
 
 function sendActivationLine(phone, code) {
@@ -502,11 +509,11 @@ function sendActivationLine(phone, code) {
 }
 
 document.getElementById("btnCreateEmployee").onclick = async () => {
-  if (!requireToken()) return;
+  if (!requireToken("newEmployeeResult")) return;
   const phone = document.getElementById("newPhone").value.trim();
-  if (!phone) return toast("請輸入手機號碼", "error");
+  if (!phone) return showInline("newEmployeeResult", "請輸入手機號碼", "error");
   if (employeesCache.some((e) => e.phone === phone && e.status !== "resigned")) {
-    return toast("此手機號碼已有帳號", "error");
+    return showInline("newEmployeeResult", "此手機號碼已有帳號", "error");
   }
   const code = generateActivationCode();
   const newEmp = {
@@ -519,9 +526,10 @@ document.getElementById("btnCreateEmployee").onclick = async () => {
     createdAt: new Date().toISOString(),
   };
   employeesCache.push(newEmp);
+  const btn = document.getElementById("btnCreateEmployee");
+  setButtonLoading(btn, "寫入中…");
   try {
     await writeJSONWithRetry("data/employees.json", employeesCache, `開通新員工 ${phone}`, token);
-    toast("已產生啟用碼並寫入系統", "success");
     document.getElementById("newEmployeeResult").innerHTML =
       `<div class="row-item"><div>啟用碼：<strong style="font-family:var(--font-mono)">${code}</strong></div>
        <button class="btn btn-line" onclick="sendActivationLine('${phone}','${code}')">用 LINE 傳送給員工</button></div>`;
@@ -529,24 +537,38 @@ document.getElementById("btnCreateEmployee").onclick = async () => {
     renderEmployeeList();
     renderManagerList();
   } catch (err) {
-    toast("寫入失敗：" + err.message, "error");
+    showInline("newEmployeeResult", "寫入失敗：" + err.message, "error");
     employeesCache.pop();
   }
+  clearButtonLoading(btn);
 };
 
 async function markResigned(empId) {
-  if (!requireToken()) return;
-  if (!confirm("確定要將此員工標記為離職嗎？離職後該帳號將無法再登入。")) return;
+  if (!requireToken("newEmployeeResult")) return;
   const emp = employeesCache.find((e) => e.id === empId);
   emp.status = "resigned";
   emp.isManager = false;
   try {
     await writeJSONWithRetry("data/employees.json", employeesCache, `標記離職 ${emp.phone}`, token);
-    toast("已標記離職", "success");
     renderEmployeeList();
     renderManagerList();
   } catch (err) {
-    toast("寫入失敗：" + err.message, "error");
+    showInline("newEmployeeResult", "寫入失敗：" + err.message, "error");
+  }
+}
+
+async function deleteEmployee(empId) {
+  if (!requireToken("newEmployeeResult")) return;
+  const emp = employeesCache.find((e) => e.id === empId);
+  if (!emp) return;
+  employeesCache = employeesCache.filter((e) => e.id !== empId);
+  try {
+    await writeJSONWithRetry("data/employees.json", employeesCache, `刪除員工 ${emp.phone}`, token);
+    renderEmployeeList();
+    renderManagerList();
+  } catch (err) {
+    employeesCache.push(emp);
+    showInline("newEmployeeResult", "刪除失敗：" + err.message, "error");
   }
 }
 
@@ -562,15 +584,18 @@ async function loadConfig() {
 }
 
 document.getElementById("btnSaveStoreName").onclick = async () => {
-  if (!requireToken()) return;
+  if (!requireToken("storeNameStatus")) return;
   configCache.storeName = document.getElementById("storeNameInput").value.trim();
+  const btn = document.getElementById("btnSaveStoreName");
+  setButtonLoading(btn, "儲存中…");
   try {
     await writeJSONWithRetry("data/config.json", configCache, "更新公司/部門顯示名稱", token);
     document.getElementById("brandName").textContent = configCache.storeName || "Shift Guardian";
-    toast("已儲存名稱", "success");
+    showInline("storeNameStatus", "已儲存名稱", "success");
   } catch (err) {
-    toast("寫入失敗：" + err.message, "error");
+    showInline("storeNameStatus", "寫入失敗：" + err.message, "error");
   }
+  clearButtonLoading(btn);
 };
 
 document.querySelectorAll('input[name=leaveMode]').forEach((r) => {
@@ -580,16 +605,19 @@ document.querySelectorAll('input[name=leaveMode]').forEach((r) => {
 });
 
 document.getElementById("btnSavePolicy").onclick = async () => {
-  if (!requireToken()) return;
+  if (!requireToken("policyStatus")) return;
   const mode = document.querySelector('input[name=leaveMode]:checked').value;
   const fixedDays = Number(document.getElementById("fixedDaysInput").value) || 7;
   configCache.leavePolicy = { mode, fixedDays };
+  const btn = document.getElementById("btnSavePolicy");
+  setButtonLoading(btn, "儲存中…");
   try {
     await writeJSONWithRetry("data/config.json", configCache, "更新特休政策設定", token);
-    toast("已儲存特休政策", "success");
+    showInline("policyStatus", "已儲存特休政策", "success");
   } catch (err) {
-    toast("寫入失敗：" + err.message, "error");
+    showInline("policyStatus", "寫入失敗：" + err.message, "error");
   }
+  clearButtonLoading(btn);
 };
 
 // ---------- 月份排休鎖定 ----------
@@ -610,34 +638,38 @@ document.getElementById("prevMonthAdmin").onclick = () => { adminMonthOffset--; 
 document.getElementById("nextMonthAdmin").onclick = () => { adminMonthOffset++; loadMonthAdmin(); };
 
 document.getElementById("btnLockMonth").onclick = async () => {
-  if (!requireToken()) return;
+  if (!requireToken("monthStatus")) return;
+  const btn = document.getElementById("btnLockMonth");
   const monthKey = currentMonthKey(adminMonthOffset);
   const schedule = (await readJSON(`data/schedule-${monthKey}.json`).catch(() => null)) || { month: monthKey, days: {}, specialLeave: [] };
   schedule.status = "locked";
   schedule.lockedAt = new Date().toISOString();
+  setButtonLoading(btn, "鎖定中…");
   try {
     await writeJSONWithRetry(`data/schedule-${monthKey}.json`, schedule, `鎖定 ${monthKey} 排休`, token);
-    toast("已鎖定本月排休", "success");
-    loadMonthAdmin();
+    await loadMonthAdmin();
   } catch (err) {
-    toast("寫入失敗：" + err.message, "error");
+    showInline("monthStatus", "寫入失敗：" + err.message, "error");
   }
+  clearButtonLoading(btn);
 };
 
 document.getElementById("btnUnlockMonth").onclick = async () => {
-  if (!requireToken()) return;
+  if (!requireToken("monthStatus")) return;
+  const btn = document.getElementById("btnUnlockMonth");
   const monthKey = currentMonthKey(adminMonthOffset);
   const schedule = await readJSON(`data/schedule-${monthKey}.json`).catch(() => null);
-  if (!schedule) return toast("本月尚無資料", "error");
+  if (!schedule) return showInline("monthStatus", "本月尚無資料", "error");
   schedule.status = "draft";
   schedule.lockedAt = null;
+  setButtonLoading(btn, "解除中…");
   try {
     await writeJSONWithRetry(`data/schedule-${monthKey}.json`, schedule, `解除鎖定 ${monthKey}`, token);
-    toast("已解除鎖定", "success");
-    loadMonthAdmin();
+    await loadMonthAdmin();
   } catch (err) {
-    toast("寫入失敗：" + err.message, "error");
+    showInline("monthStatus", "寫入失敗：" + err.message, "error");
   }
+  clearButtonLoading(btn);
 };
 
 // ---------- 核心：套用單一筆申請資料（不管來源是URL連結還是本機待審清單） ----------
@@ -716,28 +748,31 @@ function renderLocalPendingList() {
   }
   el.innerHTML = items.map((item, idx) => `
     <div class="row-item">
-      <div>${renderApplyPayloadPreview(item.payload)}<div class="meta">送出時間：${item.submittedAt}</div></div>
+      <div>${renderApplyPayloadPreview(item.payload)}<div class="meta">送出時間：${item.submittedAt}</div>
+        <p id="lpMsg${idx}" class="inline-alert"></p>
+      </div>
       <div style="display:flex; gap:8px;">
-        <button class="btn btn-primary" style="padding:6px 10px; font-size:12px;" onclick="approveLocalPending(${idx})">核准</button>
-        <button class="btn btn-danger" style="padding:6px 10px; font-size:12px;" onclick="rejectLocalPending(${idx})">駁回</button>
+        <button class="btn btn-primary" style="padding:6px 10px; font-size:12px;" onclick="approveLocalPending(this, ${idx})">核准</button>
+        <button class="btn btn-danger" style="padding:6px 10px; font-size:12px;" onclick="confirmButtonClick(this, () => rejectLocalPending(${idx}), '確定？再按一次')">駁回</button>
       </div>
     </div>`).join("");
 }
 
-async function approveLocalPending(idx) {
-  if (!requireToken()) return;
+async function approveLocalPending(btn, idx) {
+  if (!requireToken(`lpMsg${idx}`)) return;
   const items = scanAllLocalPending();
   const item = items[idx];
   if (!item) return;
+  setButtonLoading(btn, "寫入中…");
   try {
     await applyPayload(item.payload);
     clearPending(item.employeeId, item.itemKey);
-    toast("已核准並寫入系統", "success");
     await loadEmployees();
     await loadMonthAdmin();
     renderLocalPendingList();
   } catch (err) {
-    toast("寫入失敗：" + err.message, "error");
+    showInline(`lpMsg${idx}`, "寫入失敗：" + err.message, "error");
+    clearButtonLoading(btn);
   }
 }
 
@@ -745,9 +780,7 @@ function rejectLocalPending(idx) {
   const items = scanAllLocalPending();
   const item = items[idx];
   if (!item) return;
-  if (!confirm("確定要駁回這筆申請嗎？將從這台裝置清除，本人需要重新送出。")) return;
   clearPending(item.employeeId, item.itemKey);
-  toast("已駁回", "info");
   renderLocalPendingList();
 }
 
@@ -761,7 +794,7 @@ function checkIncomingApply() {
   try {
     pendingPayload = decodePayload(encoded);
   } catch (e) {
-    toast("連結格式錯誤", "error");
+    showInline("applyError", "連結格式錯誤", "error");
     return;
   }
   renderApplyPreview();
@@ -781,30 +814,31 @@ function renderApplyPreview() {
 }
 
 document.getElementById("btnReject").onclick = () => {
-  pendingPayload = null;
-  document.getElementById("applyCard").style.display = "none";
-  toast("已駁回，未寫入系統", "info");
-  history.replaceState({}, "", location.pathname);
+  confirmButtonClick(document.getElementById("btnReject"), () => {
+    pendingPayload = null;
+    document.getElementById("applyCard").style.display = "none";
+    history.replaceState({}, "", location.pathname);
+  }, "確定駁回？再按一次");
 };
 
 document.getElementById("btnApprove").onclick = async () => {
   if (!pendingPayload) return;
-  const errEl = document.getElementById("applyError");
-  errEl.style.display = "none";
-  if (!requireToken()) return;
+  showInline("applyError", "", "info");
+  if (!requireToken("applyError")) return;
 
+  const btn = document.getElementById("btnApprove");
+  setButtonLoading(btn, "寫入中…");
   try {
     await applyPayload(pendingPayload);
-    toast("已核准並寫入系統", "success");
     pendingPayload = null;
     document.getElementById("applyCard").style.display = "none";
     history.replaceState({}, "", location.pathname);
     await loadEmployees();
     await loadMonthAdmin();
   } catch (err) {
-    errEl.textContent = "寫入失敗：" + err.message;
-    errEl.style.display = "block";
+    showInline("applyError", "寫入失敗：" + err.message, "error");
   }
+  clearButtonLoading(btn);
 };
 
 // ---------- 資料備份／還原 ----------
@@ -844,40 +878,36 @@ async function buildBackup() {
 document.getElementById("btnExportBackup").onclick = async () => {
   const btn = document.getElementById("btnExportBackup");
   const statusEl = document.getElementById("exportStatus");
-  btn.disabled = true;
+  setButtonLoading(btn, isKioskMode() && token ? "寫入 GitHub 中…" : "準備下載中…");
 
   const useGithub = isKioskMode() && !!token;
-  statusEl.textContent = useGithub ? "備份中，寫入 GitHub 中，請稍候…" : "備份中，準備下載，請稍候…";
 
   try {
     const backup = await buildBackup();
 
     if (useGithub) {
       const now = new Date();
-      const stamp = now.toISOString().replace(/[:.]/g, "-");
+      const stamp = taipeiTimestampForFilename(now);
       const path = `backups/backup-${stamp}.json`;
-      await writeJSONWithRetry(path, backup, `公務機自動備份 ${now.toLocaleString("zh-TW")}`, token);
-      statusEl.textContent = `已存到 GitHub：${path}（${backup.employees.length} 位員工、${Object.keys(backup.schedules).length} 個月份資料）`;
-      toast("備份已存到 GitHub", "success");
+      await writeJSONWithRetry(path, backup, `公務機自動備份 ${now.toLocaleString("zh-TW", { timeZone: "Asia/Taipei" })}`, token);
+      showInline("exportStatus", `已存到 GitHub：${path}（${backup.employees.length} 位員工、${Object.keys(backup.schedules).length} 個月份資料）`, "success");
     } else {
       const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
-      const dateStr = new Date().toISOString().slice(0, 10);
+      const dateStr = taipeiTimestampForFilename(new Date()).slice(0, 10);
       a.href = url;
       a.download = `shift-guardian-backup-${dateStr}.json`;
       document.body.appendChild(a);
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
-      statusEl.textContent = `匯出完成：${backup.employees.length} 位員工、${Object.keys(backup.schedules).length} 個月份的排班資料。檔案已下載，請妥善保存。`;
-      toast("備份已下載", "success");
+      showInline("exportStatus", `匯出完成：${backup.employees.length} 位員工、${Object.keys(backup.schedules).length} 個月份的排班資料。檔案已下載，請妥善保存。`, "success");
     }
   } catch (err) {
-    statusEl.textContent = "備份失敗：" + err.message;
-    toast("備份失敗：" + err.message, "error");
+    showInline("exportStatus", "備份失敗：" + err.message, "error");
   }
-  btn.disabled = false;
+  clearButtonLoading(btn);
 };
 
 function updateExportModeHint() {
@@ -889,12 +919,44 @@ function updateExportModeHint() {
   }
 }
 
+let pendingImportBackup = null;
+
 document.getElementById("btnImportBackup").onclick = async () => {
-  if (!requireToken()) return;
+  if (!requireToken("importStatus")) return;
+  const btn = document.getElementById("btnImportBackup");
+
+  if (btn.dataset.confirming === "1") {
+    // 第二次點擊：真正執行還原
+    btn.dataset.confirming = "0";
+    btn.classList.remove("btn-confirming");
+    const backup = pendingImportBackup;
+    pendingImportBackup = null;
+    if (!backup) return;
+
+    setButtonLoading(btn, "還原中…");
+    try {
+      await writeJSONWithRetry("data/employees.json", backup.employees, "從備份還原員工資料", token);
+      await writeJSONWithRetry("data/config.json", backup.config, "從備份還原系統設定", token);
+      for (const monthKey of Object.keys(backup.schedules || {})) {
+        const schedule = backup.schedules[monthKey];
+        if (schedule) {
+          await writeJSONWithRetry(`data/schedule-${monthKey}.json`, schedule, `從備份還原 ${monthKey} 排班資料`, token);
+        }
+      }
+      showInline("importStatus", `還原完成：${backup.employees.length} 位員工、${Object.keys(backup.schedules || {}).length} 個月份的排班資料已寫回線上。`, "success");
+      await loadEmployees();
+      await loadMonthAdmin();
+    } catch (err) {
+      showInline("importStatus", "還原失敗：" + err.message, "error");
+    }
+    clearButtonLoading(btn);
+    btn.textContent = "還原此備份（會覆蓋目前線上資料）";
+    return;
+  }
+
   const fileInput = document.getElementById("importFile");
-  const statusEl = document.getElementById("importStatus");
   if (!fileInput.files || fileInput.files.length === 0) {
-    return toast("請先選擇備份檔", "error");
+    return showInline("importStatus", "請先選擇備份檔", "error");
   }
 
   let backup;
@@ -902,56 +964,99 @@ document.getElementById("btnImportBackup").onclick = async () => {
     const text = await fileInput.files[0].text();
     backup = JSON.parse(text);
   } catch (e) {
-    return toast("備份檔格式錯誤，無法解析", "error");
+    return showInline("importStatus", "備份檔格式錯誤，無法解析", "error");
   }
 
   if (!backup.employees || !backup.config) {
-    return toast("這不是有效的備份檔（缺少必要欄位）", "error");
+    return showInline("importStatus", "這不是有效的備份檔（缺少必要欄位）", "error");
   }
 
   const empCount = backup.employees.length;
   const monthCount = Object.keys(backup.schedules || {}).length;
-  const exportedAt = backup.exportedAt ? new Date(backup.exportedAt).toLocaleString("zh-TW") : "未知時間";
+  const exportedAt = backup.exportedAt ? new Date(backup.exportedAt).toLocaleString("zh-TW", { timeZone: "Asia/Taipei" }) : "未知時間";
 
-  const confirmed = confirm(
-    `即將還原備份（匯出時間：${exportedAt}）：\n- ${empCount} 位員工\n- ${monthCount} 個月份的排班資料\n\n這會覆蓋目前線上的資料，確定要繼續嗎？`
-  );
-  if (!confirmed) return;
-
-  statusEl.textContent = "還原中，請稍候…";
-  try {
-    await writeJSONWithRetry("data/employees.json", backup.employees, "從備份還原員工資料", token);
-    await writeJSONWithRetry("data/config.json", backup.config, "從備份還原系統設定", token);
-    for (const monthKey of Object.keys(backup.schedules || {})) {
-      const schedule = backup.schedules[monthKey];
-      if (schedule) {
-        await writeJSONWithRetry(`data/schedule-${monthKey}.json`, schedule, `從備份還原 ${monthKey} 排班資料`, token);
-      }
+  pendingImportBackup = backup;
+  showInline("importStatus", `匯出時間：${exportedAt}｜${empCount} 位員工｜${monthCount} 個月份資料。這會覆蓋線上資料，請再按一次「確定還原」執行。`, "info");
+  btn.dataset.confirming = "1";
+  btn.classList.add("btn-confirming");
+  btn.textContent = "確定還原？再按一次";
+  setTimeout(() => {
+    if (btn.dataset.confirming === "1") {
+      btn.dataset.confirming = "0";
+      btn.classList.remove("btn-confirming");
+      btn.textContent = "還原此備份（會覆蓋目前線上資料）";
+      pendingImportBackup = null;
     }
-    statusEl.textContent = `還原完成：${empCount} 位員工、${monthCount} 個月份的排班資料已寫回線上。`;
-    toast("備份已還原", "success");
-    await loadEmployees();
-    await loadMonthAdmin();
-  } catch (err) {
-    statusEl.textContent = "還原失敗：" + err.message;
-    toast("還原失敗：" + err.message, "error");
-  }
+  }, 8000);
 };
 
 // ---------- 支援排班登記 ----------
+let selectedSupportDate = null;
+let supportScheduleCache = null;
+
 function initSupportSection() {
-  document.getElementById("supportMonth").value = currentMonthKey(0);
   const empSel = document.getElementById("supportEmployee");
   const activeEmployees = employeesCache.filter((e) => e.status === "active" && !e.noSchedule);
   empSel.innerHTML = activeEmployees.map((e) => `<option value="${e.id}">${e.alias || e.firstName}（${getShiftLabel(e.shift)}）</option>`).join("");
+
+  const monthSel = document.getElementById("supportMonth");
+  const monthOptions = [-1, 0, 1, 2].map((off) => currentMonthKey(off));
+  monthSel.innerHTML = monthOptions.map((m) => `<option value="${m}" ${off_selected(m)}>${monthLabel(m)}</option>`).join("");
+
   const shiftSel = document.getElementById("supportShift");
   shiftSel.innerHTML = SHIFTS.map((s) => `<option value="${s.code}">${s.code} ${s.name}</option>`).join("");
-  loadSupportList();
+
+  document.getElementById("supportEmployee").onchange = renderSupportDayGrid;
+  document.getElementById("supportMonth").onchange = renderSupportDayGrid;
+  renderSupportDayGrid();
 }
 
-async function loadSupportList() {
-  const monthKey = document.getElementById("supportMonth").value.trim() || currentMonthKey(0);
+function off_selected(m) {
+  return m === currentMonthKey(0) ? "selected" : "";
+}
+
+async function renderSupportDayGrid() {
+  selectedSupportDate = null;
+  const empId = document.getElementById("supportEmployee").value;
+  const monthKey = document.getElementById("supportMonth").value;
+  const grid = document.getElementById("supportDayGrid");
+  document.getElementById("btnAddSupport").disabled = true;
+  document.getElementById("btnAddSupport").textContent = "請先點選日期";
+  if (!empId || !monthKey) { grid.innerHTML = ""; return; }
+
   const schedule = await readJSON(`data/schedule-${monthKey}.json`).catch(() => null);
+  supportScheduleCache = schedule;
+  const offDays = (schedule?.days?.[empId]) || [];
+  const approvedLeaveDays = (schedule?.specialLeave || []).filter((r) => r.employeeId === empId && r.status === "approved").map((r) => r.date);
+  const supportDays = (schedule?.support || []).filter((r) => r.employeeId === empId).map((r) => r.date);
+  const nDays = daysInMonth(monthKey);
+
+  grid.innerHTML = "";
+  for (let d = 1; d <= nDays; d++) {
+    const dateStr = `${monthKey}-${pad2(d)}`;
+    const isOff = offDays.includes(dateStr) || approvedLeaveDays.includes(dateStr);
+    const hasSupport = supportDays.includes(dateStr);
+    const cell = document.createElement("div");
+    cell.className = "day-cell" + (isOff ? " disabled" : "") + (hasSupport ? " taken-by-others" : "");
+    cell.style.background = isOff ? "rgba(200,67,58,0.14)" : "";
+    cell.textContent = d;
+    if (!isOff) {
+      cell.onclick = () => {
+        selectedSupportDate = dateStr;
+        Array.from(grid.children).forEach((c) => c.classList.remove("selected"));
+        cell.classList.add("selected");
+        document.getElementById("btnAddSupport").disabled = false;
+        document.getElementById("btnAddSupport").textContent = `新增支援登記（${dateStr}）`;
+      };
+    }
+    grid.appendChild(cell);
+  }
+  loadSupportList(monthKey);
+}
+
+async function loadSupportList(monthKey) {
+  monthKey = monthKey || document.getElementById("supportMonth").value;
+  const schedule = supportScheduleCache && supportScheduleCache.month === monthKey ? supportScheduleCache : await readJSON(`data/schedule-${monthKey}.json`).catch(() => null);
   const list = (schedule?.support) || [];
   const el = document.getElementById("supportList");
   if (list.length === 0) {
@@ -963,45 +1068,46 @@ async function loadSupportList() {
     const name = emp ? (emp.alias || emp.firstName) : r.employeeId;
     return `<div class="row-item">
       <div>${name}　${r.date}　支援 ${getShiftLabel(r.supportShift)}</div>
-      <button class="btn btn-danger" style="padding:6px 10px; font-size:12px;" onclick="removeSupport('${monthKey}','${r.id}')">刪除</button>
+      <button class="btn btn-danger" style="padding:6px 10px; font-size:12px;" onclick="confirmButtonClick(this, () => removeSupport('${monthKey}','${r.id}'), '確定？再按一次')">刪除</button>
     </div>`;
   }).join("");
 }
 
-document.getElementById("supportMonth").addEventListener("change", loadSupportList);
-
 document.getElementById("btnAddSupport").onclick = async () => {
-  if (!requireToken()) return;
-  const monthKey = document.getElementById("supportMonth").value.trim();
+  if (!requireToken("supportStatus")) return;
+  const monthKey = document.getElementById("supportMonth").value;
   const employeeId = document.getElementById("supportEmployee").value;
-  const date = document.getElementById("supportDate").value;
   const supportShift = document.getElementById("supportShift").value;
-  if (!monthKey || !employeeId || !date || !supportShift) return toast("請完整填寫支援登記欄位", "error");
-  if (!date.startsWith(monthKey)) return toast("支援日期需在所選月份內", "error");
+  if (!selectedSupportDate) return showInline("supportStatus", "請先點選要支援的日期", "error");
 
+  const btn = document.getElementById("btnAddSupport");
+  setButtonLoading(btn, "寫入中…");
   const schedule = (await readJSON(`data/schedule-${monthKey}.json`).catch(() => null)) || { month: monthKey, status: "draft", days: {}, specialLeave: [] };
   schedule.support = schedule.support || [];
-  schedule.support.push({ id: generateRequestId(), employeeId, date, supportShift, createdAt: new Date().toISOString() });
+  schedule.support.push({ id: generateRequestId(), employeeId, date: selectedSupportDate, supportShift, createdAt: new Date().toISOString() });
   try {
-    await writeJSONWithRetry(`data/schedule-${monthKey}.json`, schedule, `新增支援排班登記 ${date}`, token);
-    toast("已新增支援登記", "success");
-    loadSupportList();
+    await writeJSONWithRetry(`data/schedule-${monthKey}.json`, schedule, `新增支援排班登記 ${selectedSupportDate}`, token);
+    showInline("supportStatus", "已新增支援登記", "success");
+    await renderSupportDayGrid();
   } catch (err) {
-    toast("寫入失敗：" + err.message, "error");
+    showInline("supportStatus", "寫入失敗：" + err.message, "error");
   }
+  clearButtonLoading(btn);
+  btn.textContent = "請先點選日期";
+  btn.disabled = true;
 };
 
 async function removeSupport(monthKey, recordId) {
-  if (!requireToken()) return;
+  if (!requireToken("supportStatus")) return;
   const schedule = await readJSON(`data/schedule-${monthKey}.json`).catch(() => null);
   if (!schedule || !schedule.support) return;
   schedule.support = schedule.support.filter((r) => r.id !== recordId);
   try {
     await writeJSONWithRetry(`data/schedule-${monthKey}.json`, schedule, `刪除支援排班登記`, token);
-    toast("已刪除", "success");
-    loadSupportList();
+    showInline("supportStatus", "已刪除", "success");
+    await renderSupportDayGrid();
   } catch (err) {
-    toast("寫入失敗：" + err.message, "error");
+    showInline("supportStatus", "寫入失敗：" + err.message, "error");
   }
 }
 

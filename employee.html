@@ -10,11 +10,10 @@
 <body>
 <div class="wrap">
   <div class="topbar">
-    <div class="brand"><span class="dot"></span><span id="brandName">Shift Guardian</span></div>
+    <a href="admin.html" style="text-decoration:none;"><div class="brand"><span class="dot"></span><span id="brandName">Shift Guardian</span></div></a>
     <div class="nav-links">
       <a href="index.html">公開月曆</a>
       <a href="employee.html" class="active" id="navEmployeeLink">員工登入</a>
-      <a href="admin.html">主管後台</a>
     </div>
   </div>
 
@@ -121,6 +120,9 @@
     <div class="btn-row">
       <button class="btn btn-primary" id="btnSubmitSetup">儲存（待主管於此裝置或用LINE審核）</button>
     </div>
+    <div class="btn-row">
+      <button class="btn btn-secondary" id="btnSetupBack">返回上一步，讓其他人先操作</button>
+    </div>
   </div>
 
   <!-- 7. 已送出、待主管核准（灰階鎖定顯示） -->
@@ -131,6 +133,11 @@
       <button class="btn btn-line" id="btnResendRegister">重新傳LINE給主管</button>
       <button class="btn btn-secondary" id="btnDirectAdminFromRegister" style="display:none;">直接前往主管頁處理</button>
     </div>
+    <div class="btn-row">
+      <button class="btn btn-secondary" id="btnCheckApprovalStatus">檢查審核情形</button>
+      <button class="btn btn-secondary" id="btnLogoutFromPending">登出，讓其他人使用</button>
+    </div>
+    <p id="approvalCheckResult" class="hint" style="margin-top:8px;"></p>
   </div>
 
   <!-- 8. 主畫面 -->
@@ -217,6 +224,7 @@ async function loadBrand() {
   document.getElementById("brandName").textContent = (config && config.storeName) ? config.storeName : "Shift Guardian";
 }
 loadBrand();
+initTopbarShrink();
 
 if (isKioskMode()) {
   document.getElementById("kioskBanner").style.display = "block";
@@ -436,6 +444,27 @@ document.getElementById("btnDirectAdminFromRegister").onclick = () => {
   location.href = `admin.html?apply=${encoded}`;
 };
 
+document.getElementById("btnSetupBack").onclick = () => {
+  showScreen("screenPhone");
+};
+
+document.getElementById("btnCheckApprovalStatus").onclick = async () => {
+  const resultEl = document.getElementById("approvalCheckResult");
+  resultEl.textContent = "檢查中…";
+  const employees = (await readJSON("data/employees.json").catch(() => [])) || [];
+  const emp = employees.find((e) => e.id === currentEmployee.id);
+  if (emp && emp.status === "active") {
+    resultEl.textContent = "已核准！正在進入系統…";
+    currentEmployee = emp;
+    clearPending(currentEmployee.id, "register");
+    setTimeout(() => showMainPanel(), 500);
+  } else {
+    resultEl.textContent = `尚未核准（檢查時間：${new Date().toLocaleString("zh-TW")}）`;
+  }
+};
+
+document.getElementById("btnLogoutFromPending").onclick = doLogout;
+
 // ---------- 顯示主畫面 ----------
 async function showMainPanel() {
   showScreen("mainPanel");
@@ -601,7 +630,7 @@ function renderOffDayGrid(activeEmployees) {
   document.getElementById("selectedCount").textContent = selectedDays.size;
 }
 
-document.getElementById("btnSendOffDays").onclick = () => {
+document.getElementById("btnSendOffDays").onclick = async () => {
   if (selectedDays.size !== MONTHLY_OFF_DAYS_REQUIRED) {
     return toast(`請選滿 ${MONTHLY_OFF_DAYS_REQUIRED} 天再送出`, "error");
   }
@@ -611,6 +640,32 @@ document.getElementById("btnSendOffDays").onclick = () => {
     month: targetMonthKey,
     dates: Array.from(selectedDays).sort(),
   };
+
+  const kioskToken = localStorage.getItem(LS_KEY_ADMIN_TOKEN);
+  if (isKioskMode() && kioskToken) {
+    // 公務機模式：直接寫入GitHub，不需要主管另外審核
+    const btn = document.getElementById("btnSendOffDays");
+    setButtonLoading(btn, "寫入中…");
+    try {
+      const freshSchedule = (await readJSON(`data/schedule-${targetMonthKey}.json`).catch(() => null)) || { month: targetMonthKey, status: "draft", days: {}, specialLeave: [] };
+      if (freshSchedule.status === "locked") {
+        clearButtonLoading(btn);
+        return toast("本月排休已由主管鎖定，無法再修改，請聯絡主管", "error");
+      }
+      freshSchedule.days = freshSchedule.days || {};
+      freshSchedule.days[currentEmployee.id] = payload.dates;
+      await writeJSONWithRetry(`data/schedule-${targetMonthKey}.json`, freshSchedule, `${currentEmployee.alias || currentEmployee.firstName} 更新 ${targetMonthKey} 排休（公務機直接寫入）`, kioskToken);
+      scheduleCache = freshSchedule;
+      clearButtonLoading(btn);
+      toast("已直接寫入，公開月曆可立即查看", "success");
+      renderOffDaysSection(lastActiveEmployees);
+    } catch (err) {
+      clearButtonLoading(btn);
+      toast("寫入失敗：" + err.message, "error");
+    }
+    return;
+  }
+
   savePending(currentEmployee.id, "off_days_" + targetMonthKey, payload);
   toast("已儲存，若在公司公務機上可請主管直接在後台審核；不在店內則可用下方按鈕改傳LINE", "success");
   document.getElementById("offDaysEditArea").style.display = "none";
