@@ -75,7 +75,7 @@ const IDLE_TIMEOUT_MS = 5 * 60 * 1000; // 5 分鐘
 const MIN_STAFF_WARNING_THRESHOLD = 3;
 
 // 系統版本（每次更新請同步修改，並在頁面底部顯示，方便確認目前載入的是哪個版本）
-const APP_VERSION = "1.0-014";
+const APP_VERSION = "1.0-015";
 
 // localStorage / sessionStorage keys
 const LS_KEY_EMPLOYEE_SESSION = "sg_employee_session"; // { employeeId, phone }
