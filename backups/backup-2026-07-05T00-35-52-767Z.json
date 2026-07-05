@@ -1,0 +1,29 @@
+{
+  "exportedAt": "2026-07-05T00:35:52.766Z",
+  "repo": "john7t/shift-guardian",
+  "employees": [
+    {
+      "id": "emp_aqdhviyg",
+      "phone": "0975379800",
+      "activationCode": "",
+      "createdAt": "2026-07-05T00:32:47.547Z",
+      "lastName": "王",
+      "firstName": "小美",
+      "alias": "美",
+      "shift": "A1",
+      "hireDate": "2025-05-05",
+      "passwordHash": "9af15b336e6a9619928537df30b2e6a2376569fcf9d7e773eccede65606529a0",
+      "noSchedule": false,
+      "status": "active",
+      "isManager": true
+    }
+  ],
+  "config": {
+    "storeName": "雲心閣 櫃台排休",
+    "leavePolicy": {
+      "mode": "labor_law",
+      "fixedDays": 7
+    }
+  },
+  "schedules": {}
+}
