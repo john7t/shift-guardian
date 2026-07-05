@@ -110,6 +110,78 @@ function isKioskMode() {
   return localStorage.getItem(LS_KEY_KIOSK_MODE) === "1";
 }
 
+// ---------- 台北時區（UTC+8）時間格式化 ----------
+function taipeiTimestampForFilename(d = new Date()) {
+  // 回傳可用於檔名的字串，例如 2026-07-05_08-47-37（台北時間）
+  const parts = new Intl.DateTimeFormat("zh-TW", {
+    timeZone: "Asia/Taipei",
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", second: "2-digit",
+    hour12: false,
+  }).formatToParts(d);
+  const get = (type) => parts.find((p) => p.type === type)?.value;
+  return `${get("year")}-${get("month")}-${get("day")}_${get("hour")}-${get("minute")}-${get("second")}`;
+}
+
+function taipeiTimeDisplay(isoString) {
+  if (!isoString) return "-";
+  return new Date(isoString).toLocaleString("zh-TW", { timeZone: "Asia/Taipei", hour12: false });
+}
+
+// ---------- 按鈕「寫入中」狀態（取代單純toast，讓按鈕本身反映狀態） ----------
+function setButtonLoading(btn, loadingText = "處理中…") {
+  if (!btn) return;
+  btn.dataset.originalText = btn.textContent;
+  btn.disabled = true;
+  btn.classList.add("is-loading");
+  btn.innerHTML = `<span class="spinner"></span>${loadingText}`;
+}
+function clearButtonLoading(btn) {
+  if (!btn) return;
+  btn.disabled = false;
+  btn.classList.remove("is-loading");
+  btn.textContent = btn.dataset.originalText || btn.textContent;
+}
+
+// ---------- 按鈕下方紅字/綠字提示（取代 toast 彈窗） ----------
+function showInline(elementId, message, type = "error") {
+  const el = document.getElementById(elementId);
+  if (!el) return;
+  el.textContent = message;
+  el.className = `inline-alert ${type}`;
+}
+
+// ---------- 二次確認按鈕（第一次點顯示「確定？」，第二次點才真正執行） ----------
+function confirmButtonClick(btn, actionFn, confirmLabel = "確定？再按一次") {
+  if (btn.dataset.confirming === "1") {
+    btn.dataset.confirming = "0";
+    btn.classList.remove("btn-confirming");
+    btn.textContent = btn.dataset.originalLabel || btn.textContent;
+    actionFn();
+  } else {
+    btn.dataset.confirming = "1";
+    btn.dataset.originalLabel = btn.textContent;
+    btn.classList.add("btn-confirming");
+    btn.textContent = confirmLabel;
+    setTimeout(() => {
+      if (btn.dataset.confirming === "1") {
+        btn.dataset.confirming = "0";
+        btn.classList.remove("btn-confirming");
+        btn.textContent = btn.dataset.originalLabel;
+      }
+    }, 4000);
+  }
+}
+
+// ---------- 置頂列滾動縮小 50% ----------
+function initTopbarShrink() {
+  const topbar = document.querySelector(".topbar");
+  if (!topbar) return;
+  window.addEventListener("scroll", () => {
+    topbar.classList.toggle("shrink", window.scrollY > 30);
+  });
+}
+
 function clearPending(employeeId, key) {
   const store = getAllPending(employeeId);
   delete store[key];
