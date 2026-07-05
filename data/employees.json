@@ -1,16 +1,17 @@
 [
   {
-    "id": "emp_ov60izss",
-    "phone": "0912345678",
-    "activationCode": "941-540",
-    "status": "issued",
-    "lastName": "",
-    "firstName": "",
-    "alias": "",
-    "shift": "",
-    "hireDate": "",
-    "passwordHash": "",
-    "isManager": false,
-    "createdAt": "2026-07-05T00:29:57.786Z"
+    "id": "emp_aqdhviyg",
+    "phone": "0975379800",
+    "activationCode": "",
+    "createdAt": "2026-07-05T00:32:12.236Z",
+    "lastName": "王",
+    "firstName": "小美",
+    "alias": "美",
+    "shift": "A1",
+    "hireDate": "2025-05-05",
+    "passwordHash": "9af15b336e6a9619928537df30b2e6a2376569fcf9d7e773eccede65606529a0",
+    "noSchedule": false,
+    "status": "active",
+    "isManager": true
   }
 ]
