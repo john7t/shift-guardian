@@ -182,6 +182,7 @@ input:focus, select:focus {
 .btn-block { width: 100%; }
 .btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
 .view-scope-btn.active { background: var(--dawn); color: #fff; border-color: var(--dawn); }
+.month-target-btn.active { background: var(--dusk); color: #fff; border-color: var(--dusk); }
 
 /* ---------- Calendar ---------- */
 .cal-scroll { overflow-x: auto; }
@@ -245,6 +246,23 @@ table.cal td.emp-name {
   50% { opacity: 0.25; }
 }
 .badge.support { background: rgba(74,95,199,0.16); color: var(--dusk); line-height: 1.15; }
+
+/* ---------- 支援排班登記日曆專用樣式（避免跟一般day-cell的選取色混淆） ---------- */
+.day-cell.support-off {
+  background: var(--danger);
+  color: #fff;
+  opacity: 1;
+  cursor: not-allowed;
+}
+.day-cell.support-marked {
+  box-shadow: inset 0 0 0 2px var(--success);
+}
+.day-cell.support-selected {
+  background: var(--dusk);
+  color: #fff;
+  border-color: var(--dusk);
+  font-weight: 700;
+}
 
 /* ---------- 二次確認按鈕（取代 confirm() 彈窗） ---------- */
 .btn-confirming {
