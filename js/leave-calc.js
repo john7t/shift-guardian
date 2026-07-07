@@ -51,3 +51,24 @@ function calcUsedAnnualLeave(employeeId, leaveRequests) {
     (r) => r.employeeId === employeeId && r.type === "annual" && r.status === "approved"
   ).length;
 }
+
+/**
+ * 特休總額度換算成小時（policy.hourlyEnabled 為 true 時使用）
+ */
+function calcAnnualLeaveQuotaHours(hireDateStr, policy) {
+  const days = calcAnnualLeaveQuota(hireDateStr, policy);
+  const hoursPerDay = policy.hoursPerDay || 8;
+  return days * hoursPerDay;
+}
+
+/**
+ * 計算某員工特休已使用「小時數」（只計入 approved 狀態）。
+ * 若該筆申請沒有 hours 欄位（例如切換成小時制之前的舊資料，或以整天申請），
+ * 視為請了一整天，換算成 hoursPerDay 小時。
+ */
+function calcUsedAnnualLeaveHours(employeeId, leaveRequests, policy) {
+  const hoursPerDay = policy.hoursPerDay || 8;
+  return leaveRequests
+    .filter((r) => r.employeeId === employeeId && r.type === "annual" && r.status === "approved")
+    .reduce((sum, r) => sum + (typeof r.hours === "number" ? r.hours : hoursPerDay), 0);
+}

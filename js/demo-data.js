@@ -38,6 +38,12 @@ const DEMO1_SCHEDULE = {
       requestedAt: "2026-04-20T14:30:00+08:00", decidedAt: "2026-04-21T09:00:00+08:00",
     },
   ],
+  support: [
+    // 小美(A2)當天特休，由小花(B)支援A2
+    { id: "demo_sup_1", employeeId: "demo_e3", date: "2026-05-20", supportShift: "A2", createdAt: "2026-04-19T10:10:00+08:00" },
+    // 小偌(C1)當天特休，由小小(D)支援C1
+    { id: "demo_sup_2", employeeId: "demo_e6", date: "2026-05-24", supportShift: "C1", createdAt: "2026-04-21T09:05:00+08:00" },
+  ],
 };
 
 // ---------- 展示頁 2：大量重疊排休，觸發人力短缺警示 ----------
@@ -63,5 +69,16 @@ const DEMO2_SCHEDULE = {
       type: "annual", status: "pending",
       requestedAt: "2026-05-28T11:00:00+08:00", decidedAt: null,
     },
+  ],
+  support: [
+    // 6/5 短缺（小美/小花/小偌/小小同天休）：小明支援A2，小婷支援D
+    { id: "demo_sup_3", employeeId: "demo_e1", date: "2026-06-05", supportShift: "A2", createdAt: "2026-06-01T09:00:00+08:00" },
+    { id: "demo_sup_4", employeeId: "demo_e5", date: "2026-06-05", supportShift: "D",  createdAt: "2026-06-01T09:00:00+08:00" },
+    // 6/12 短缺（小明/小美/小婷同天休）：小花支援A2，小偌支援C2
+    { id: "demo_sup_5", employeeId: "demo_e3", date: "2026-06-12", supportShift: "A2", createdAt: "2026-06-08T09:00:00+08:00" },
+    { id: "demo_sup_6", employeeId: "demo_e4", date: "2026-06-12", supportShift: "C2", createdAt: "2026-06-08T09:00:00+08:00" },
+    // 6/20 短缺（小花/小偌/小小同天休）：小美支援B，小婷支援D
+    { id: "demo_sup_7", employeeId: "demo_e2", date: "2026-06-20", supportShift: "B", createdAt: "2026-06-15T09:00:00+08:00" },
+    { id: "demo_sup_8", employeeId: "demo_e5", date: "2026-06-20", supportShift: "D", createdAt: "2026-06-15T09:00:00+08:00" },
   ],
 };

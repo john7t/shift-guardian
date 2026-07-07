@@ -63,6 +63,8 @@ const MONTHLY_OFF_DAYS_REQUIRED = 6;
 const DEFAULT_LEAVE_POLICY = {
   mode: "labor_law", // "labor_law" | "fixed"
   fixedDays: 7,
+  hourlyEnabled: false, // 是否允許以小時為單位申請特休
+  hoursPerDay: 8,        // 1天折抵幾小時（hourlyEnabled為true時才使用）
 };
 
 // 這支手機號碼永遠視為管理員：登入免啟用碼/密碼，且自動擁有主管權限
@@ -75,7 +77,7 @@ const IDLE_TIMEOUT_MS = 5 * 60 * 1000; // 5 分鐘
 const MIN_STAFF_WARNING_THRESHOLD = 3;
 
 // 系統版本（每次更新請同步修改，並在頁面底部顯示，方便確認目前載入的是哪個版本）
-const APP_VERSION = "1.0-015";
+const APP_VERSION = "1.0-018";
 
 // localStorage / sessionStorage keys
 const LS_KEY_EMPLOYEE_SESSION = "sg_employee_session"; // { employeeId, phone }
