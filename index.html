@@ -12,7 +12,7 @@
   <div class="topbar">
     <div style="display:flex; align-items:center; gap:14px;">
       <a href="admin.html" style="text-decoration:none;"><div class="brand"><span class="dot"></span><span id="brandName">Shift Guardian</span></div></a>
-      <a href="index.html" class="active" style="font-size:13px; color:var(--text-dim); text-decoration:none; padding:6px 10px; border-radius:999px; border:1px solid var(--line);">公開月曆</a>
+      <a href="index.html" class="active" style="font-size:13px; color:var(--text-dim); text-decoration:none; padding:6px 10px; border-radius:999px; border:1px solid var(--line);">班表</a>
     </div>
     <div class="nav-links">
       <a href="employee.html" id="navEmployeeLink">員工登入</a>
@@ -33,6 +33,9 @@
       <span class="status-pill status-pending">示範資料，非實際排班</span>
     </div>
     <div id="statusLine" class="hint" style="margin:8px 0 0;"></div>
+
+    <label style="margin-top:12px;">顯示範圍</label>
+    <select id="viewFilter"></select>
 
     <div id="calWeeks" style="margin-top:14px;"></div>
 
@@ -104,6 +107,45 @@ async function updateNavEmployeeLabel() {
 updateNavEmployeeLabel();
 initTopbarShrink();
 
+let currentViewFilter = "all";
+document.getElementById("viewFilter").onchange = (e) => {
+  currentViewFilter = e.target.value;
+  loadView();
+};
+
+function populateViewFilter(employees) {
+  const sel = document.getElementById("viewFilter");
+  const prevValue = currentViewFilter;
+  let options = `<option value="all">所有人</option>`;
+  const hasEarly = employees.some((e) => e.shift === "A1" || e.shift === "A2");
+  const hasLate = employees.some((e) => e.shift === "C2" || e.shift === "D");
+  if (hasEarly) options += `<option value="group:early">早上組（A1/A2）</option>`;
+  if (hasLate) options += `<option value="group:late">晚上組（C2/D）</option>`;
+  employees.forEach((e) => {
+    const label = e.alias || `${e.lastName || ""}${e.firstName || ""}` || e.phone || e.id;
+    options += `<option value="emp:${e.id}">${label}</option>`;
+  });
+  sel.innerHTML = options;
+  // 若先前選的值在新名單裡還存在，保留選擇；否則回到「所有人」
+  if ([...sel.options].some((o) => o.value === prevValue)) {
+    sel.value = prevValue;
+  } else {
+    currentViewFilter = "all";
+    sel.value = "all";
+  }
+}
+
+function applyViewFilter(employees) {
+  if (currentViewFilter === "all") return employees;
+  if (currentViewFilter === "group:early") return employees.filter((e) => e.shift === "A1" || e.shift === "A2");
+  if (currentViewFilter === "group:late") return employees.filter((e) => e.shift === "C2" || e.shift === "D");
+  if (currentViewFilter.startsWith("emp:")) {
+    const id = currentViewFilter.slice(4);
+    return employees.filter((e) => e.id === id);
+  }
+  return employees;
+}
+
 async function loadView() {
   document.getElementById("demoBadge").style.display = "none";
 
@@ -117,11 +159,13 @@ async function loadView() {
       ? "示範情境：6位員工排休大致錯開，另有2筆已核准的特休。"
       : "示範情境：多位員工排休重疊，下方會列出人力短缺的日期與人員。";
 
+    populateViewFilter(DEMO_EMPLOYEES);
+    const filtered = applyViewFilter(DEMO_EMPLOYEES);
     const shortageDays = computeShortageDays(monthKey, DEMO_EMPLOYEES, schedule);
-    renderCalendar(monthKey, DEMO_EMPLOYEES, schedule, true, shortageDays);
+    renderCalendar(monthKey, filtered, schedule, true, shortageDays);
     renderWarnings(monthKey, DEMO_EMPLOYEES, schedule, shortageDays);
-    renderLeaveTable(DEMO_EMPLOYEES, { leavePolicy: DEFAULT_LEAVE_POLICY }, schedule, true);
-    renderLeaveLog(DEMO_EMPLOYEES, schedule, true);
+    renderLeaveTable(filtered, { leavePolicy: DEFAULT_LEAVE_POLICY }, schedule, true);
+    renderLeaveLog(filtered, schedule, true);
     document.getElementById("prevMonth").disabled = isDemo1;
     return;
   }
@@ -147,12 +191,14 @@ async function loadView() {
       : "本月排休仍在協調中，尚未由主管最終核定。";
   }
 
+  populateViewFilter(activeEmployees);
+  const filtered = applyViewFilter(activeEmployees);
   const reveal = hasEmployeeSession();
   const shortageDays = computeShortageDays(monthKey, activeEmployees, schedule);
-  renderCalendar(monthKey, activeEmployees, schedule, reveal, shortageDays);
+  renderCalendar(monthKey, filtered, schedule, reveal, shortageDays);
   renderWarnings(monthKey, activeEmployees, schedule, shortageDays);
-  renderLeaveTable(activeEmployees, config, schedule, reveal);
-  renderLeaveLog(activeEmployees, schedule, reveal);
+  renderLeaveTable(filtered, config, schedule, reveal);
+  renderLeaveLog(filtered, schedule, reveal);
 }
 
 const WEEKDAY_LABELS = ["日", "一", "二", "三", "四", "五", "六"];
@@ -306,16 +352,24 @@ function renderLeaveTable(employees, config, schedule, reveal) {
   }
   el.innerHTML = employees
     .map((emp) => {
-      const quota = calcAnnualLeaveQuota(emp.hireDate, policy);
-      const used = schedule
-        ? schedule.specialLeave?.filter((r) => r.employeeId === emp.id && r.status === "approved").length || 0
-        : 0;
       const label = reveal
         ? `${emp.alias || emp.lastName + emp.firstName} <span class="meta">${getShiftLabel(emp.shift)}</span>`
         : `${getShiftLabel(emp.shift)}`;
+      let statsText;
+      if (policy.hourlyEnabled) {
+        const quotaHours = calcAnnualLeaveQuotaHours(emp.hireDate, policy);
+        const usedHours = schedule ? calcUsedAnnualLeaveHours(emp.id, schedule.specialLeave || [], policy) : 0;
+        statsText = `總額度 ${quotaHours} 小時 ｜ 已用 ${usedHours} 小時 ｜ 剩餘 <strong style="color:var(--success)">${Math.max(quotaHours - usedHours, 0)}</strong> 小時`;
+      } else {
+        const quota = calcAnnualLeaveQuota(emp.hireDate, policy);
+        const used = schedule
+          ? schedule.specialLeave?.filter((r) => r.employeeId === emp.id && r.status === "approved").length || 0
+          : 0;
+        statsText = `總額度 ${quota} 天 ｜ 已用 ${used} 天 ｜ 剩餘 <strong style="color:var(--success)">${Math.max(quota - used, 0)}</strong> 天`;
+      }
       return `<div class="row-item">
         <div><strong>${label}</strong></div>
-        <div class="meta">總額度 ${quota} 天 ｜ 已用 ${used} 天 ｜ 剩餘 <strong style="color:var(--success)">${Math.max(quota - used, 0)}</strong> 天</div>
+        <div class="meta">${statsText}</div>
       </div>`;
     })
     .join("");
@@ -338,7 +392,7 @@ function renderLeaveLog(employees, schedule, reveal) {
     const decided = r.decidedAt ? taipeiTimeDisplay(r.decidedAt) : "-";
     return `<div class="row-item">
       <div>
-        <strong>${name}</strong> 申請 ${r.date}
+        <strong>${name}</strong> 申請 ${r.date}${typeof r.hours === "number" ? `（${r.hours}小時）` : ""}
         <div class="meta">提交時間：${submitted}　｜　核准時間：${decided}</div>
       </div>
       <span class="status-pill ${statusClass}">${statusLabel}</span>

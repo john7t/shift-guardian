@@ -12,7 +12,7 @@
   <div class="topbar">
     <div style="display:flex; align-items:center; gap:14px;">
       <a href="admin.html" style="text-decoration:none;"><div class="brand"><span class="dot"></span><span id="brandName">Shift Guardian</span></div></a>
-      <a href="index.html" style="font-size:13px; color:var(--text-dim); text-decoration:none; padding:6px 10px; border-radius:999px; border:1px solid var(--line);">公開月曆</a>
+      <a href="index.html" style="font-size:13px; color:var(--text-dim); text-decoration:none; padding:6px 10px; border-radius:999px; border:1px solid var(--line);">班表</a>
     </div>
     <div class="nav-links">
       <a href="employee.html" class="active" id="navEmployeeLink">員工登入</a>
@@ -151,7 +151,14 @@
     </div>
 
     <div class="card" id="offDaysCard">
-      <h2>排定下月休假（需選滿 <span id="reqDaysNum"></span> 天）</h2>
+      <h2>排定休假（需選滿 <span id="reqDaysNum"></span> 天）</h2>
+      <div class="btn-row" style="margin-top:0;">
+        <button class="btn btn-secondary month-target-btn" data-offset="0">本月</button>
+        <button class="btn btn-secondary month-target-btn" data-offset="1">下月</button>
+      </div>
+      <div id="offDaysLockedArea" style="display:none;">
+        <div class="hint" style="color:var(--danger); margin-top:10px;">此月份已由主管鎖定，無法再修改，如需調整請聯絡主管解鎖。</div>
+      </div>
       <div id="offDaysEditArea">
         <div class="hint">點選日期切換選取，藍色框代表其他人已排休/請特休（含同一台裝置上其他人尚未送出的暫存選擇）。選好後產生連結傳給主管確認上線。</div>
         <div class="btn-row" style="margin-top:8px;">
@@ -180,6 +187,10 @@
       <div id="pendingLeaveList" class="row-list" style="margin-bottom:10px;"></div>
       <label>選擇日期</label>
       <input type="date" id="annualLeaveDate" />
+      <div id="leaveHoursWrap" style="display:none;">
+        <label>請假時數（該政策允許以小時為單位申請，例如只請2小時）</label>
+        <input type="text" id="annualLeaveHours" placeholder="例如 2" />
+      </div>
       <div class="btn-row">
         <button class="btn btn-primary" id="btnApplyAnnual">儲存申請</button>
       </div>
@@ -203,7 +214,7 @@ let employeesCache = [];
 let currentEmployee = null;
 let scheduleCache = null;
 let configCache = null;
-let targetMonthKey = currentMonthKey(1); // 排休預設排「下個月」
+let targetMonthKey = currentMonthKey(0); // 排休預設「本月」，可切換「下月」
 let pendingPhoneForCode = null;
 let pendingPhoneForPw = null;
 
@@ -499,7 +510,6 @@ async function showMainPanel() {
   if (freshEmp) currentEmployee = freshEmp;
   clearPending(currentEmployee.id, "register");
 
-  scheduleCache = await readJSON(`data/schedule-${targetMonthKey}.json`).catch(() => null);
   // 「免排班/排休」的人不參與排休協調顯示
   const activeEmployees = employeesCache.filter((e) => (e.status === "active" && !e.noSchedule) || e.id === currentEmployee.id);
 
@@ -517,15 +527,51 @@ async function showMainPanel() {
   document.getElementById("leaveCard").style.display = "block";
   document.getElementById("noScheduleCard").style.display = "none";
 
-  const policy = configCache?.leavePolicy || DEFAULT_LEAVE_POLICY;
-  const quota = calcAnnualLeaveQuota(currentEmployee.hireDate, policy);
-  const used = scheduleCache
-    ? (scheduleCache.specialLeave || []).filter((r) => r.employeeId === currentEmployee.id && r.status === "approved").length
-    : 0;
-  document.getElementById("leaveBalanceInfo").textContent =
-    `特休總額度 ${quota} 天，已用 ${used} 天，剩餘 ${Math.max(quota - used, 0)} 天`;
+  lastActiveEmployeesGlobal = activeEmployees;
+  await loadOffDaysMonth(monthOffsetSelected);
+  renderLeaveSection();
+}
 
-  renderOffDaysSection(activeEmployees);
+let monthOffsetSelected = 0; // 0=本月, 1=下月
+let lastActiveEmployeesGlobal = [];
+
+document.querySelectorAll(".month-target-btn").forEach((btn) => {
+  btn.onclick = async () => {
+    monthOffsetSelected = Number(btn.dataset.offset);
+    await loadOffDaysMonth(monthOffsetSelected);
+  };
+});
+
+async function loadOffDaysMonth(offset) {
+  targetMonthKey = currentMonthKey(offset);
+  document.querySelectorAll(".month-target-btn").forEach((b) => b.classList.toggle("active", Number(b.dataset.offset) === offset));
+
+  scheduleCache = await readJSON(`data/schedule-${targetMonthKey}.json`).catch(() => null);
+
+  const policy = configCache?.leavePolicy || DEFAULT_LEAVE_POLICY;
+  document.getElementById("leaveHoursWrap").style.display = policy.hourlyEnabled ? "block" : "none";
+  if (policy.hourlyEnabled) {
+    const quotaHours = calcAnnualLeaveQuotaHours(currentEmployee.hireDate, policy);
+    const usedHours = scheduleCache ? calcUsedAnnualLeaveHours(currentEmployee.id, scheduleCache.specialLeave || [], policy) : 0;
+    document.getElementById("leaveBalanceInfo").textContent =
+      `特休總額度 ${quotaHours} 小時，已用 ${usedHours} 小時，剩餘 ${Math.max(quotaHours - usedHours, 0)} 小時`;
+  } else {
+    const quota = calcAnnualLeaveQuota(currentEmployee.hireDate, policy);
+    const used = scheduleCache
+      ? (scheduleCache.specialLeave || []).filter((r) => r.employeeId === currentEmployee.id && r.status === "approved").length
+      : 0;
+    document.getElementById("leaveBalanceInfo").textContent =
+      `特休總額度 ${quota} 天，已用 ${used} 天，剩餘 ${Math.max(quota - used, 0)} 天`;
+  }
+
+  const isLocked = scheduleCache && scheduleCache.status === "locked";
+  document.getElementById("offDaysLockedArea").style.display = isLocked ? "block" : "none";
+  document.getElementById("offDaysEditArea").style.display = isLocked ? "none" : "";
+  document.getElementById("offDaysPendingArea").style.display = "none";
+
+  if (!isLocked) {
+    renderOffDaysSection(lastActiveEmployeesGlobal);
+  }
   renderLeaveSection();
 }
 
@@ -680,13 +726,18 @@ document.getElementById("btnSendOffDays").onclick = async () => {
       await writeJSONWithRetry(`data/schedule-${targetMonthKey}.json`, freshSchedule, `${currentEmployee.alias || currentEmployee.firstName} 更新 ${targetMonthKey} 排休（公務機直接寫入）`, kioskToken);
       scheduleCache = freshSchedule;
       clearButtonLoading(btn);
-      toast("已直接寫入，公開月曆可立即查看", "success");
+      toast("已直接寫入，班表可立即查看", "success");
       renderOffDaysSection(lastActiveEmployees);
     } catch (err) {
       clearButtonLoading(btn);
       toast("寫入失敗：" + err.message, "error");
     }
     return;
+  }
+
+  const freshCheck = await readJSON(`data/schedule-${targetMonthKey}.json`).catch(() => null);
+  if (freshCheck && freshCheck.status === "locked") {
+    return toast("此月份已由主管鎖定，無法再修改，請聯絡主管解鎖", "error");
   }
 
   savePending(currentEmployee.id, "off_days_" + targetMonthKey, payload);
@@ -716,7 +767,7 @@ function renderLeaveSection() {
       const p = getAllPending(currentEmployee.id)[k].payload;
       const lineBtn = isKioskMode() ? "" : `<button class="btn btn-secondary" style="padding:6px 10px; font-size:12px;" onclick='sendToManager(${JSON.stringify(p)}, "${currentEmployee.alias || currentEmployee.firstName} 申請 ${p.date} 特休，請主管審核。")'>傳LINE</button>`;
       return `<div class="row-item" style="opacity:0.8;">
-        <div>特休申請：${p.date}</div>
+        <div>特休申請：${p.date}${typeof p.hours === "number" ? `（${p.hours}小時）` : ""}</div>
         <div style="display:flex; align-items:center; gap:8px;">
           <span class="status-pill status-pending">待主管確認</span>
           ${lineBtn}
@@ -729,8 +780,15 @@ function renderLeaveSection() {
 document.getElementById("btnApplyAnnual").onclick = () => {
   const date = document.getElementById("annualLeaveDate").value;
   if (!date) return toast("請選擇日期", "error");
+  const policy = configCache?.leavePolicy || DEFAULT_LEAVE_POLICY;
+  let hours = null;
+  if (policy.hourlyEnabled) {
+    hours = Number(document.getElementById("annualLeaveHours").value);
+    if (!hours || hours <= 0) return toast("請輸入要申請的時數", "error");
+    if (hours > policy.hoursPerDay) return toast(`單日最多 ${policy.hoursPerDay} 小時`, "error");
+  }
   const requestId = generateRequestId();
-  const payload = { type: "leave_request", employeeId: currentEmployee.id, date, requestId };
+  const payload = { type: "leave_request", employeeId: currentEmployee.id, date, requestId, hours };
   savePending(currentEmployee.id, "leave_" + requestId, payload);
   toast("已儲存，若在公司公務機上可請主管直接在後台審核；不在店內則可在下方清單用「傳LINE」通知", "success");
   renderLeaveSection();
