@@ -47,14 +47,15 @@
     "id": "emp_9xbb607u",
     "phone": "0932153918",
     "activationCode": "035-332",
-    "status": "issued",
-    "lastName": "",
-    "firstName": "",
-    "alias": "",
-    "shift": "",
-    "hireDate": "",
-    "passwordHash": "",
+    "status": "active",
+    "lastName": "李",
+    "firstName": "佩蓉",
+    "alias": "蓉",
+    "shift": "C2",
+    "hireDate": "2026-01-01",
+    "passwordHash": "c45c01c3885bc08666959321f2baa506550c313732851f871e977b1cef564e98",
     "isManager": false,
-    "createdAt": "2026-07-07T11:11:51.950Z"
+    "createdAt": "2026-07-07T11:11:51.950Z",
+    "noSchedule": false
   }
 ]
