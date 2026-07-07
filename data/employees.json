@@ -42,5 +42,19 @@
     "passwordHash": "",
     "isManager": false,
     "createdAt": "2026-07-07T09:52:38.465Z"
+  },
+  {
+    "id": "emp_9xbb607u",
+    "phone": "0932153918",
+    "activationCode": "035-332",
+    "status": "issued",
+    "lastName": "",
+    "firstName": "",
+    "alias": "",
+    "shift": "",
+    "hireDate": "",
+    "passwordHash": "",
+    "isManager": false,
+    "createdAt": "2026-07-07T11:11:51.950Z"
   }
 ]
