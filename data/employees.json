@@ -18,28 +18,15 @@
     "id": "emp_2tpqapit",
     "phone": "0910195640",
     "activationCode": "892-642",
-    "status": "issued",
-    "lastName": "",
-    "firstName": "",
-    "alias": "",
-    "shift": "",
-    "hireDate": "",
-    "passwordHash": "",
-    "isManager": false,
-    "createdAt": "2026-07-07T09:29:40.063Z"
-  },
-  {
-    "id": "emp_mt6i54ig",
-    "phone": "0905805815",
-    "activationCode": "889-087",
-    "status": "issued",
-    "lastName": "",
-    "firstName": "",
-    "alias": "",
-    "shift": "",
-    "hireDate": "",
-    "passwordHash": "",
-    "isManager": false,
-    "createdAt": "2026-07-07T09:40:06.989Z"
+    "status": "active",
+    "lastName": "黃",
+    "firstName": "嘉榆",
+    "alias": "嘉嘉",
+    "shift": "NONE",
+    "hireDate": "2026-01-01",
+    "passwordHash": "16a3e9e922b41fde13be3ae377b18e08d44fb136594e7f9819ff2ac75bab5516",
+    "isManager": true,
+    "createdAt": "2026-07-07T09:29:40.063Z",
+    "noSchedule": true
   }
 ]
