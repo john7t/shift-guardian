@@ -72,5 +72,19 @@
     "passwordHash": "",
     "isManager": false,
     "createdAt": "2026-07-07T15:47:26.334Z"
+  },
+  {
+    "id": "emp_19vzcilr",
+    "phone": "0919563520",
+    "activationCode": "295-751",
+    "status": "issued",
+    "lastName": "",
+    "firstName": "",
+    "alias": "",
+    "shift": "",
+    "hireDate": "",
+    "passwordHash": "",
+    "isManager": false,
+    "createdAt": "2026-07-08T11:18:00.929Z"
   }
 ]
