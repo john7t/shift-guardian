@@ -91,25 +91,6 @@ async function hashText(text) {
   return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-// ---------- 本機暫存「已送出但尚未經主管核准」的資料 ----------
-function savePending(employeeId, key, payload) {
-  const store = getAllPending(employeeId);
-  store[key] = { payload, submittedAt: new Date().toISOString() };
-  localStorage.setItem(LS_KEY_PENDING_PREFIX + employeeId, JSON.stringify(store));
-}
-
-function getAllPending(employeeId) {
-  try {
-    return JSON.parse(localStorage.getItem(LS_KEY_PENDING_PREFIX + employeeId) || "{}");
-  } catch (e) {
-    return {};
-  }
-}
-
-function isKioskMode() {
-  return localStorage.getItem(LS_KEY_KIOSK_MODE) === "1";
-}
-
 // ---------- 台北時區（UTC+8）時間格式化 ----------
 function taipeiTimestampForFilename(d = new Date()) {
   // 回傳可用於檔名的字串，例如 2026-07-05_08-47-37（台北時間）
@@ -180,37 +161,5 @@ function initTopbarShrink() {
   window.addEventListener("scroll", () => {
     topbar.classList.toggle("shrink", window.scrollY > 30);
   });
-}
-
-function clearPending(employeeId, key) {
-  const store = getAllPending(employeeId);
-  delete store[key];
-  localStorage.setItem(LS_KEY_PENDING_PREFIX + employeeId, JSON.stringify(store));
-}
-
-// 掃描本機（這台裝置）目前所有員工累積的待審資料，回傳攤平的清單
-// 用於「公用機」情境：多人在同一台裝置輪流操作，主管最後在同一台機器上統一審核
-function scanAllLocalPending() {
-  const results = [];
-  for (let i = 0; i < localStorage.length; i++) {
-    const key = localStorage.key(i);
-    if (!key || !key.startsWith(LS_KEY_PENDING_PREFIX)) continue;
-    const employeeId = key.slice(LS_KEY_PENDING_PREFIX.length);
-    let store;
-    try {
-      store = JSON.parse(localStorage.getItem(key) || "{}");
-    } catch (e) {
-      continue;
-    }
-    Object.keys(store).forEach((itemKey) => {
-      results.push({
-        employeeId,
-        itemKey,
-        payload: store[itemKey].payload,
-        submittedAt: store[itemKey].submittedAt,
-      });
-    });
-  }
-  return results;
 }
 

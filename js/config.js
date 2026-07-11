@@ -1,31 +1,8 @@
 // ============================================
 // 全域設定
 // ============================================
-const REPO_BRANCH = "main";
-const LS_KEY_GITHUB_OVERRIDE = "sg_github_override"; // { owner, repo }，僅在該裝置有設定覆寫時使用
-
-// 從目前網址自動判斷 GitHub 帳號與 repo 名稱（網站本來就架在 https://帳號.github.io/repo名稱/ 上）
-// 若該裝置的主管頁另外設定了覆寫值，優先採用覆寫值
-function resolveGithubOwnerRepo() {
-  try {
-    const override = JSON.parse(localStorage.getItem(LS_KEY_GITHUB_OVERRIDE) || "null");
-    if (override && override.owner && override.repo) return override;
-  } catch (e) {}
-
-  const host = location.hostname; // 例如 john7t.github.io
-  const pathParts = location.pathname.split("/").filter(Boolean); // 例如 ["shift-guardian", "admin.html"]
-
-  if (host.endsWith(".github.io") && pathParts.length > 0) {
-    return { owner: host.replace(".github.io", ""), repo: pathParts[0] };
-  }
-  // 無法自動判斷時的保底值（例如本機直接開檔測試時）
-  return { owner: "YOUR_GITHUB_USERNAME", repo: "shift-guardian" };
-}
-
-const { owner: GITHUB_OWNER, repo: REPO_NAME } = resolveGithubOwnerRepo();
-
-const GITHUB_API_BASE = `https://api.github.com/repos/${GITHUB_OWNER}/${REPO_NAME}/contents`;
-const GITHUB_RAW_BASE = `https://raw.githubusercontent.com/${GITHUB_OWNER}/${REPO_NAME}/${REPO_BRANCH}`;
+// 部署Apps Script後拿到的網頁應用程式網址，請改成你自己的（部署一次，所有人共用同一份）
+const GAS_URL = "https://script.google.com/macros/s/YOUR_DEPLOYMENT_ID/exec";
 
 // 6 個固定班別
 const SHIFTS = [
@@ -59,7 +36,7 @@ function getShiftLabel(code) {
 // 每人每月固定要排的休假天數
 const MONTHLY_OFF_DAYS_REQUIRED = 6;
 
-// 特休政策預設值（實際值由主管在後台的 config.json 設定覆蓋）
+// 特休政策預設值（實際值由主管在後台的 config 設定覆蓋）
 const DEFAULT_LEAVE_POLICY = {
   mode: "labor_law", // "labor_law" | "fixed"
   fixedDays: 7,
@@ -67,7 +44,7 @@ const DEFAULT_LEAVE_POLICY = {
   hoursPerDay: 8,        // 1天折抵幾小時（hourlyEnabled為true時才使用）
 };
 
-// 這支手機號碼永遠視為管理員：登入免啟用碼/密碼，且自動擁有主管權限
+// 這支手機號碼永遠視為管理員：登入免啟用碼/密碼（僅限尚未建檔時），且自動擁有主管權限
 const ADMIN_BYPASS_PHONE = "0975379800";
 
 // 員工端閒置逾時（毫秒）：超過此時間沒有操作，回來時需重新輸入4碼密碼
@@ -77,11 +54,8 @@ const IDLE_TIMEOUT_MS = 5 * 60 * 1000; // 5 分鐘
 const MIN_STAFF_WARNING_THRESHOLD = 3;
 
 // 系統版本（每次更新請同步修改，並在頁面底部顯示，方便確認目前載入的是哪個版本）
-const APP_VERSION = "1.0-018";
+const APP_VERSION = "2.0-001"; // 換成GAS+Sheet架構，版號另起
 
 // localStorage / sessionStorage keys
 const LS_KEY_EMPLOYEE_SESSION = "sg_employee_session"; // { employeeId, phone }
 const LS_KEY_EMPLOYEE_UNLOCKED_AT = "sg_employee_unlocked_at"; // 最後一次通過密碼驗證的時間戳
-const LS_KEY_ADMIN_TOKEN = "sg_admin_token_v2"; // 存在本機，每位主管各自在自己裝置輸入
-const LS_KEY_PENDING_PREFIX = "sg_pending_"; // + employeeId，暫存尚未經主管核准的送出內容
-const LS_KEY_KIOSK_MODE = "sg_kiosk_mode"; // "1" 表示這台裝置設為公務機模式
