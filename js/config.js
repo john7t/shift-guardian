@@ -2,7 +2,7 @@
 // 全域設定
 // ============================================
 // 部署Apps Script後拿到的網頁應用程式網址，請改成你自己的（部署一次，所有人共用同一份）
-const GAS_URL = "https://script.google.com/macros/s/YOUR_DEPLOYMENT_ID/exec";
+const GAS_URL = "https://script.google.com/macros/s/AKfycbzr3g1f_Q6LhJa_FWev75q-SdH2SKlKvoQNt6WTTBT_f_tLdBSfXgYafo-Bri477-dQ/exec";
 
 // 6 個固定班別
 const SHIFTS = [
